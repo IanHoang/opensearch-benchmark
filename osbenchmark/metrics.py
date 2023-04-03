@@ -1658,6 +1658,11 @@ class GlobalStatsCalculator:
         result.old_gc_time = self.sum("node_total_old_gen_gc_time")
         result.old_gc_count = self.sum("node_total_old_gen_gc_count")
 
+        result.shenandoah_pauses_time = self.sum("node_total_shenandoah_pauses_time")
+        result.shenandoah_pauses_count = self.sum("node_total_shenandoah_pauses_count")
+        result.shenandoah_cycles_time = self.sum("node_total_shenandoah_cycles_time")
+        result.shenandoah_cycles_count = self.sum("node_total_shenandoah_cycles_count")
+
         self.logger.debug("Gathering segment memory metrics.")
         result.memory_segments = self.median("segments_memory_in_bytes")
         result.memory_doc_values = self.median("segments_doc_values_memory_in_bytes")
@@ -1819,10 +1824,16 @@ class GlobalStats:
         self.merge_throttle_time_per_shard = self.v(d, "merge_throttle_time_per_shard", default={})
         self.ml_processing_time = self.v(d, "ml_processing_time", default=[])
 
-        self.young_gc_time = self.v(d, "young_gc_time")
-        self.young_gc_count = self.v(d, "young_gc_count")
-        self.old_gc_time = self.v(d, "old_gc_time")
-        self.old_gc_count = self.v(d, "old_gc_count")
+        if self.v(d, "young_gc_time") is not None:
+            self.young_gc_time = self.v(d, "young_gc_time")
+            self.young_gc_count = self.v(d, "young_gc_count")
+            self.old_gc_time = self.v(d, "old_gc_time")
+            self.old_gc_count = self.v(d, "old_gc_count")
+        elif self.v(d, "shenandoah_pauses_time") is not None:
+            self.shenandoah_pauses_time = self.v(d, "shenandoah_pauses_time")
+            self.shenandoah_pauses_count = self.v(d, "shenandoah_pauses_count")
+            self.shenandoah_cycles_time = self.v(d, "shenandoah_cycles_time")
+            self.shenandoah_cycles_count = self.v(d, "shenandoah_cycles_count")
 
         self.memory_segments = self.v(d, "memory_segments")
         self.memory_doc_values = self.v(d, "memory_doc_values")

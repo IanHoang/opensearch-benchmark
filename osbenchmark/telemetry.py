@@ -1376,11 +1376,11 @@ class JvmStatsSummary(InternalTelemetryDevice):
         super().__init__()
         self.metrics_store = metrics_store
         self.client = client
-        self.jvm_stats_per_node = {}
+        self.jvm_stats_at_start = {}
 
     def on_benchmark_start(self):
         self.logger.info("JvmStatsSummary on benchmark start")
-        self.jvm_stats_per_node = self.jvm_stats()
+        self.jvm_stats_at_start = self.jvm_stats()
 
     def on_benchmark_stop(self):
         jvm_stats_at_end = self.jvm_stats()
@@ -1389,43 +1389,86 @@ class JvmStatsSummary(InternalTelemetryDevice):
         total_young_gen_collection_time = 0
         total_young_gen_collection_count = 0
 
+        total_shenandoah_pauses_collection_time = 0
+        total_shenandoah_pauses_collection_count = 0
+        total_shenandoah_cycles_collection_time = 0
+        total_shenandoah_cycles_collection_count = 0
+        self.logger.info("JVM STATS AT START: [%s]", self.jvm_stats_at_start)
+        self.logger.info("JVM STATS AT END: [%s]", jvm_stats_at_end)
+
         for node_name, jvm_stats_end in jvm_stats_at_end.items():
-            if node_name in self.jvm_stats_per_node:
-                jvm_stats_start = self.jvm_stats_per_node[node_name]
-                young_gc_time = max(jvm_stats_end["young_gc_time"] - jvm_stats_start["young_gc_time"], 0)
-                young_gc_count = max(jvm_stats_end["young_gc_count"] - jvm_stats_start["young_gc_count"], 0)
-                old_gc_time = max(jvm_stats_end["old_gc_time"] - jvm_stats_start["old_gc_time"], 0)
-                old_gc_count = max(jvm_stats_end["old_gc_count"] - jvm_stats_start["old_gc_count"], 0)
+            self.logger.info("JVM STATS END [%s]", jvm_stats_end)
+            if node_name in self.jvm_stats_at_start:
+                if "young_gc_time" in jvm_stats_end:
+                    self.logger.info("Collecting JVM stats for GC with Young and Old Generation GCs [%s]", jvm_stats_end)
+                    jvm_stats_start = self.jvm_stats_at_start[node_name]
+                    young_gc_time = max(jvm_stats_end["young_gc_time"] - jvm_stats_start["young_gc_time"], 0)
+                    young_gc_count = max(jvm_stats_end["young_gc_count"] - jvm_stats_start["young_gc_count"], 0)
+                    old_gc_time = max(jvm_stats_end["old_gc_time"] - jvm_stats_start["old_gc_time"], 0)
+                    old_gc_count = max(jvm_stats_end["old_gc_count"] - jvm_stats_start["old_gc_count"], 0)
 
-                total_young_gen_collection_time += young_gc_time
-                total_young_gen_collection_count += young_gc_count
-                total_old_gen_collection_time += old_gc_time
-                total_old_gen_collection_count += old_gc_count
+                    total_young_gen_collection_time += young_gc_time
+                    total_young_gen_collection_count += young_gc_count
+                    total_old_gen_collection_time += old_gc_time
+                    total_old_gen_collection_count += old_gc_count
 
-                self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gc_time, "ms")
-                self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_count", young_gc_count)
-                self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
-                self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_count", old_gc_count)
+                    self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_time", young_gc_time, "ms")
+                    self.metrics_store.put_value_node_level(node_name, "node_young_gen_gc_count", young_gc_count)
+                    self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_time", old_gc_time, "ms")
+                    self.metrics_store.put_value_node_level(node_name, "node_old_gen_gc_count", old_gc_count)
 
-                all_pool_stats = {
-                    "name": "jvm_memory_pool_stats"
-                }
-                for pool_name, pool_stats in jvm_stats_end["pools"].items():
-                    all_pool_stats[pool_name] = {
-                        "peak_usage": pool_stats["peak"],
-                        "unit": "byte"
+                    all_pool_stats = {
+                        "name": "jvm_memory_pool_stats"
                     }
-                self.metrics_store.put_doc(all_pool_stats, level=MetaInfoScope.node, node_name=node_name)
+                    for pool_name, pool_stats in jvm_stats_end["pools"].items():
+                        all_pool_stats[pool_name] = {
+                            "peak_usage": pool_stats["peak"],
+                            "unit": "byte"
+                        }
+                    self.metrics_store.put_doc(all_pool_stats, level=MetaInfoScope.node, node_name=node_name)
+
+                    self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
+                    self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_count", total_young_gen_collection_count)
+                    self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
+                    self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_count", total_old_gen_collection_count)
+
+                elif "shenandoah_pauses_time" in jvm_stats_end:
+                    self.logger.info("Collecting JVM stats for Shenandoah GC [%s]", jvm_stats_end)
+                    jvm_stats_start = self.jvm_stats_at_start[node_name]
+                    shenandoah_pauses_time = max(jvm_stats_end["shenandoah_pauses_time"] - jvm_stats_start["shenandoah_pauses_time"], 0)
+                    shenandoah_pauses_count = max(jvm_stats_end["shenandoah_pauses_count"] - jvm_stats_start["shenandoah_pauses_count"], 0)
+                    shenandoah_cycles_time = max(jvm_stats_end["shenandoah_cycles_time"] - jvm_stats_start["shenandoah_cycles_time"], 0)
+                    shenandoah_cycles_count = max(jvm_stats_end["shenandoah_cycles_count"] - jvm_stats_start["shenandoah_cycles_count"], 0)
+
+                    total_shenandoah_pauses_collection_time += shenandoah_pauses_time
+                    total_shenandoah_pauses_collection_count += shenandoah_pauses_count
+                    total_shenandoah_cycles_collection_time += shenandoah_cycles_time
+                    total_shenandoah_cycles_collection_count += shenandoah_cycles_count
+
+                    self.metrics_store.put_value_node_level(node_name, "node_shenandoah_pauses_time", shenandoah_pauses_time, "ms")
+                    self.metrics_store.put_value_node_level(node_name, "node_shenandoah_pauses_count", shenandoah_pauses_count)
+                    self.metrics_store.put_value_node_level(node_name, "node_shenandoah_cycles_time", shenandoah_cycles_time, "ms")
+                    self.metrics_store.put_value_node_level(node_name, "node_shenandoah_cycles_count", shenandoah_cycles_count)
+
+                    all_pool_stats = {
+                        "name": "jvm_memory_pool_stats"
+                    }
+                    for pool_name, pool_stats in jvm_stats_end["pools"].items():
+                        all_pool_stats[pool_name] = {
+                            "peak_usage": pool_stats["peak"],
+                            "unit": "byte"
+                        }
+                    self.metrics_store.put_doc(all_pool_stats, level=MetaInfoScope.node, node_name=node_name)
+
+                    self.metrics_store.put_value_cluster_level("node_total_shenandoah_pauses_time", total_shenandoah_pauses_collection_time, "ms")
+                    self.metrics_store.put_value_cluster_level("node_total_shenandoah_pauses_count", total_shenandoah_pauses_collection_count)
+                    self.metrics_store.put_value_cluster_level("node_total_shenandoah_cycles_time", total_shenandoah_cycles_collection_time, "ms")
+                    self.metrics_store.put_value_cluster_level("node_total_shenandoah_cycles_count", total_shenandoah_cycles_collection_count)
 
             else:
                 self.logger.warning("Cannot determine JVM stats for [%s] (not in the cluster at the start of the benchmark).", node_name)
 
-        self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_time", total_young_gen_collection_time, "ms")
-        self.metrics_store.put_value_cluster_level("node_total_young_gen_gc_count", total_young_gen_collection_count)
-        self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_time", total_old_gen_collection_time, "ms")
-        self.metrics_store.put_value_cluster_level("node_total_old_gen_gc_count", total_old_gen_collection_count)
-
-        self.jvm_stats_per_node = None
+        self.jvm_stats_at_start = None
 
     def jvm_stats(self):
         self.logger.debug("Gathering JVM stats")
@@ -1439,22 +1482,43 @@ class JvmStatsSummary(InternalTelemetryDevice):
         for node in nodes.values():
             node_name = node["name"]
             gc = node["jvm"]["gc"]["collectors"]
-            old_gen_collection_time = gc["old"]["collection_time_in_millis"]
-            old_gen_collection_count = gc["old"]["collection_count"]
-            young_gen_collection_time = gc["young"]["collection_time_in_millis"]
-            young_gen_collection_count = gc["young"]["collection_count"]
-            jvm_stats[node_name] = {
-                "young_gc_time": young_gen_collection_time,
-                "young_gc_count": young_gen_collection_count,
-                "old_gc_time": old_gen_collection_time,
-                "old_gc_count": old_gen_collection_count,
-                "pools": {}
-            }
-            pool_usage = node["jvm"]["mem"]["pools"]
-            for pool_name, pool_stats in pool_usage.items():
-                jvm_stats[node_name]["pools"][pool_name] = {
-                    "peak": pool_stats["peak_used_in_bytes"]
+            if "old" in gc and "young" in gc:
+                self.logger.info("GC with old and young generation detected")
+                old_gen_collection_time = gc["old"]["collection_time_in_millis"]
+                old_gen_collection_count = gc["old"]["collection_count"]
+                young_gen_collection_time = gc["young"]["collection_time_in_millis"]
+                young_gen_collection_count = gc["young"]["collection_count"]
+                jvm_stats[node_name] = {
+                    "young_gc_time": young_gen_collection_time,
+                    "young_gc_count": young_gen_collection_count,
+                    "old_gc_time": old_gen_collection_time,
+                    "old_gc_count": old_gen_collection_count,
+                    "pools": {}
                 }
+                pool_usage = node["jvm"]["mem"]["pools"]
+                for pool_name, pool_stats in pool_usage.items():
+                    jvm_stats[node_name]["pools"][pool_name] = {
+                        "peak": pool_stats["peak_used_in_bytes"]
+                    }
+            elif "Shenandoah Pauses" in gc and "Shenandoah Cycles" in gc:
+                self.logger.info("Shenandoah GC detected")
+                shenandoah_pauses_collection_time = gc["Shenandoah Pauses"]["collection_time_in_millis"]
+                shenandoah_pauses_collection_count = gc["Shenandoah Pauses"]["collection_count"]
+                shenandoah_cycles_collection_time = gc["Shenandoah Cycles"]["collection_time_in_millis"]
+                shenandoah_cycles_collection_count = gc["Shenandoah Cycles"]["collection_count"]
+                jvm_stats[node_name] = {
+                    "shenandoah_pauses_time": shenandoah_pauses_collection_time,
+                    "shenandoah_pauses_count": shenandoah_pauses_collection_count,
+                    "shenandoah_cycles_time": shenandoah_cycles_collection_time,
+                    "shenandoah_cycles_count": shenandoah_cycles_collection_count,
+                    "pools": {}
+                }
+                pool_usage = node["jvm"]["mem"]["pools"]
+                for pool_name, pool_stats in pool_usage.items():
+                    jvm_stats[node_name]["pools"][pool_name] = {
+                        "peak": pool_stats["peak_used_in_bytes"]
+                    }
+
         return jvm_stats
 
 

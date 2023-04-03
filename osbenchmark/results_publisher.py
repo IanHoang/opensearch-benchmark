@@ -120,7 +120,7 @@ class SummaryResultsPublisher:
         metrics_table.extend(self._publish_totals(stats))
         metrics_table.extend(self._publish_ml_processing_times(stats))
 
-        metrics_table.extend(self._publish_gc_metrics(stats))
+        metrics_table.extend(self._determine_gc_metrics(stats))
 
         metrics_table.extend(self._publish_disk_usage(stats))
         metrics_table.extend(self._publish_segment_memory(stats))
@@ -249,12 +249,27 @@ class SummaryResultsPublisher:
             lines.append(self._line("Max ML processing time", job_name, processing_time["max"], unit))
         return lines
 
-    def _publish_gc_metrics(self, stats):
+    def _determine_gc_metrics(self, stats):
+        if stats.young_gc_time is not None:
+            return self._publish_default_gc_metrics(stats)
+        else:
+            return self._publish_shenandoah_gc_metrics(stats)
+
+
+    def _publish_default_gc_metrics(self, stats):
         return self._join(
             self._line("Total Young Gen GC time", "", stats.young_gc_time, "s", convert.ms_to_seconds),
             self._line("Total Young Gen GC count", "", stats.young_gc_count, ""),
             self._line("Total Old Gen GC time", "", stats.old_gc_time, "s", convert.ms_to_seconds),
             self._line("Total Old Gen GC count", "", stats.old_gc_count, "")
+        )
+
+    def _publish_shenandoah_gc_metrics(self, stats):
+        return self._join(
+            self._line("Total Shenandoah Pauses GC time", "", stats.shenandoah_pauses_time, "s", convert.ms_to_seconds),
+            self._line("Total Shenandoah Pauses GC count", "", stats.shenandoah_pauses_count, ""),
+            self._line("Total Shenandoah Cycles GC time", "", stats.shenandoah_cycles_time, "s", convert.ms_to_seconds),
+            self._line("Total Shenandoah Cycles GC count", "", stats.shenandoah_cycles_count, "")
         )
 
     def _publish_disk_usage(self, stats):
@@ -364,7 +379,7 @@ class ComparisonResultsPublisher:
         metrics_table = []
         metrics_table.extend(self._publish_total_times(baseline_stats, contender_stats))
         metrics_table.extend(self._publish_ml_processing_times(baseline_stats, contender_stats))
-        metrics_table.extend(self._publish_gc_metrics(baseline_stats, contender_stats))
+        metrics_table.extend(self._determine_gc_metrics(baseline_stats, contender_stats))
         metrics_table.extend(self._publish_disk_usage(baseline_stats, contender_stats))
         metrics_table.extend(self._publish_segment_memory(baseline_stats, contender_stats))
         metrics_table.extend(self._publish_segment_counts(baseline_stats, contender_stats))
@@ -582,7 +597,13 @@ class ComparisonResultsPublisher:
                        treat_increase_as_improvement=False)
         )
 
-    def _publish_gc_metrics(self, baseline_stats, contender_stats):
+    def _determine_gc_metrics(self, baseline_stats, contender_stats):
+        if baseline_stats.young_gc_time is not None:
+            return self._publish_default_gc_metrics(baseline_stats, contender_stats)
+        else:
+            return self._publish_shenandoah_gc_metrics(baseline_stats, contender_stats)
+
+    def _publish_default_gc_metrics(self, baseline_stats, contender_stats):
         return self._join(
             self._line("Total Young Gen GC time", baseline_stats.young_gc_time, contender_stats.young_gc_time, "", "s",
                        treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
@@ -593,6 +614,20 @@ class ComparisonResultsPublisher:
             self._line("Total Old Gen GC count", baseline_stats.old_gc_count, contender_stats.old_gc_count, "", "",
                        treat_increase_as_improvement=False)
         )
+
+
+    def _publish_shenandoah_gc_metrics(self, baseline_stats, contender_stats):
+        return self._join(
+            self._line("Total Shenandoah Pauses GC time", baseline_stats.shenandoah_pauses_time, contender_stats.shenandoah_pauses_time, "", "s",
+                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
+            self._line("Total Shenandoah Pauses GC count", baseline_stats.shenandoah_pauses_count, contender_stats.shenandoah_pauses_count, "", "",
+                       treat_increase_as_improvement=False),
+            self._line("Total Shenandoah Cycles GC time", baseline_stats.shenandoah_cycles_time, contender_stats.shenandoah_cycles_time, "", "s",
+                       treat_increase_as_improvement=False, formatter=convert.ms_to_seconds),
+            self._line("Total Shenandoah Cycles GC count", baseline_stats.shenandoah_cycles_count, contender_stats.shenandoah_cycles_count, "", "",
+                       treat_increase_as_improvement=False)
+        )
+
 
     def _publish_disk_usage(self, baseline_stats, contender_stats):
         return self._join(
