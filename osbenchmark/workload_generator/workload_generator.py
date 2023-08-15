@@ -132,6 +132,7 @@ def create_workload(cfg):
     output_path = os.path.abspath(os.path.join(io.normalize_path(root_path), workload_name))
     io.ensure_dir(output_path)
 
+    # Extract mappings and corpora
     indices, corpora = extract_mappings_and_corpora(client, output_path, indices, number_of_docs)
 
     if len(indices) == 0:
@@ -149,6 +150,7 @@ def create_workload(cfg):
     workload_path = os.path.join(output_path, "workload.json")
     templates_path = os.path.join(cfg.opts("node", "benchmark.root"), "resources")
 
+    # Generate workload with indices, corpora, and queries
     if custom_queries:
         process_template(templates_path, "custom-query-workload.json.j2", template_vars, workload_path)
     else:

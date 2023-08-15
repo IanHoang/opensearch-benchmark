@@ -106,6 +106,16 @@ $ opensearch-benchmark create-workload \
 --custom-queries="<JSON filepath containing queries>"
 ```
 
+### Random Sampling
+Some users might want to sample every nth document instead of every document. To do this, users can specify a multiple, a value representing every Nth document OSB should grab.
+
+Users should not specify `--number-of-docs` as this value represents the number of docs the user wants OSB to grab from an index. This restricts OSB from sampling the entire pool of documents and insteads has it grab documents from this value. For example, if an index has originally 2500 docs but we specify `--number-of-docs index_name:1500` with `--multiple 10`, OSB will only fetch 150 docs total. This is because instead of using 2500 docs as the source of documents, it limits itself to use up to 1500 docs.
+
+Maybe when this feature is used with `--multiple` parameter, it should aim to get that number of docs total.
+
+This has been tested on one index only but needs to be tested on multiple.
+
+
 ### Common Errors
 When adding custom queries, users might experience the following error will occur if the queries do not adhere to JSON schema standards or are not in a list.
 ```

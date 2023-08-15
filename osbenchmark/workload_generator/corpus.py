@@ -62,27 +62,40 @@ def extract(client, output_path, index, number_of_docs_requested=None):
 
     logger = logging.getLogger(__name__)
 
-    number_of_docs = client.count(index=index)["count"]
+    number_of_docs_in_index = client.count(index=index)["count"]
 
-    total_docs = number_of_docs if not number_of_docs_requested else min(number_of_docs, number_of_docs_requested)
+    # Total number of docs to extract should be the smaller value when comparing number_of_docs_in_index and number_of_docs_requested
+    total_docs = number_of_docs_in_index if not number_of_docs_requested else min(number_of_docs_in_index, number_of_docs_requested)
 
     if total_docs > 0:
-        logger.info("[%d] total docs in index [%s]. Extracting [%s] docs.", number_of_docs, index, total_docs)
+        logger.info("[%d] total docs in index [%s]. Extracting [%s] docs.", number_of_docs_in_index, index, total_docs)
+
         docs_path = get_doc_outpath(output_path, index)
-        dump_documents(client, index, get_doc_outpath(output_path, index, "-1k"), min(total_docs, 1000), " for test mode")
-        dump_documents(client, index, docs_path, total_docs)
-        return template_vars(index, docs_path, total_docs)
+        dump_documents_for_test_mode(client, index, get_doc_outpath(output_path, index, "-1k"), total_docs)
+
+        multiple = 10
+        if multiple > 1:
+            dump_documents_with_multiple(client, index, docs_path, total_docs, multiple)
+            doc_count = total_docs // multiple
+        else:
+            dump_documents(client, index, docs_path, total_docs)
+            doc_count = total_docs
+        return template_vars(index, docs_path, doc_count)
     else:
         logger.info("Skipping corpus extraction fo index [%s] as it contains no documents.", index)
         return None
 
+def dump_documents_for_test_mode(client, index, out_path, total_docs):
+    # Gets the first 1000 docs in index
+    progress_message_suffix = " for test mode"
+    number_of_docs = min(total_docs, 1000)
 
-def dump_documents(client, index, out_path, number_of_docs, progress_message_suffix=""):
     # pylint: disable=import-outside-toplevel
     from opensearchpy import helpers
 
     logger = logging.getLogger(__name__)
     freq = max(1, number_of_docs // 1000)
+    logger.info("Number of docs: [%s], freq: [%s]", number_of_docs, freq)
 
     progress = console.progress()
     compressor = DOCS_COMPRESSOR()
@@ -94,6 +107,8 @@ def dump_documents(client, index, out_path, number_of_docs, progress_message_suf
             for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
                 if n >= number_of_docs:
                     break
+
+                logger.info("Nth doc [%s], doc contents: [%s]", n, doc)
                 data = (json.dumps(doc["_source"], separators=(",", ":")) + "\n").encode("utf-8")
 
                 outfile.write(data)
@@ -104,9 +119,86 @@ def dump_documents(client, index, out_path, number_of_docs, progress_message_suf
             comp_outfile.write(compressor.flush())
     progress.finish()
 
+def dump_documents(client, index, out_path, number_of_docs):
+    progress_message_suffix = ""
+    # pylint: disable=import-outside-toplevel
+    from opensearchpy import helpers
 
-def render_progress(progress, progress_message_suffix, index, cur, total, freq):
+    logger = logging.getLogger(__name__)
+    freq = max(1, number_of_docs // 1000)
+    logger.info("Number of docs: [%s], freq: [%s]", number_of_docs, freq)
+
+    progress = console.progress()
+    compressor = DOCS_COMPRESSOR()
+    comp_outpath = out_path + COMP_EXT
+    with open(out_path, "wb") as outfile:
+        with open(comp_outpath, "wb") as comp_outfile:
+            logger.info("Dumping corpus for index [%s] to [%s].", index, out_path)
+            query = {"query": {"match_all": {}}}
+            for n, doc in enumerate(helpers.scan(client, query=query, index=index)):
+                if n >= number_of_docs:
+                    break
+
+                logger.info("Nth doc [%s], doc contents: [%s]", n, doc)
+                data = (json.dumps(doc["_source"], separators=(",", ":")) + "\n").encode("utf-8")
+
+                outfile.write(data)
+                comp_outfile.write(compressor.compress(data))
+
+                render_progress(progress, progress_message_suffix, index, n + 1, number_of_docs, freq)
+
+            comp_outfile.write(compressor.flush())
+    progress.finish()
+
+def dump_documents_with_multiple(client, index, out_path, number_of_docs, multiple):
+    progress_message_suffix = ""
+    progress_message_prefix = ""
+    if multiple > 1:
+        number_of_docs = number_of_docs // multiple
+        number_of_docs_left = number_of_docs
+        progress_message_prefix = f"Extracting every {multiple}th document from"
+
+    # pylint: disable=import-outside-toplevel
+    from opensearchpy import helpers
+
+    logger = logging.getLogger(__name__)
+    freq = max(1, number_of_docs // 1000)
+    logger.info("Number of docs: [%s], freq: [%s]", number_of_docs, freq)
+
+    progress = console.progress()
+    compressor = DOCS_COMPRESSOR()
+    comp_outpath = out_path + COMP_EXT
+    with open(out_path, "wb") as outfile:
+        with open(comp_outpath, "wb") as comp_outfile:
+            logger.info("Dumping corpus for index [%s] to [%s].", index, out_path)
+            query = {"query": {"match_all": {}}}
+            for n, doc in enumerate(helpers.scan(client, query=query, index=index), start=1):
+                # This prevents progress from working
+                if (n % multiple) != 0:
+                    # logger.info("Skipping doc since not a multiple of [%s]", multiple)
+                    continue
+
+                if number_of_docs_left == 0:
+                    break
+
+                number_of_docs_left -= 1
+                current_doc = number_of_docs - number_of_docs_left
+
+                logger.info("Nth doc [%s], doc contents: [%s]", n, doc)
+                data = (json.dumps(doc["_source"], separators=(",", ":")) + "\n").encode("utf-8")
+
+                outfile.write(data)
+                comp_outfile.write(compressor.compress(data))
+
+                render_progress(progress, progress_message_suffix, index, current_doc, number_of_docs, freq, progress_message_prefix)
+
+            comp_outfile.write(compressor.flush())
+    progress.finish()
+
+def render_progress(progress, progress_message_suffix, index, cur, total, freq, progress_message_prefix=None):
+    default_progress_message_prefix = "Extracting documents for index"
     if cur % freq == 0 or total - cur < freq:
-        msg = f"Extracting documents for index [{index}]{progress_message_suffix}..."
+        msg = f"{progress_message_prefix if progress_message_prefix is not None else default_progress_message_prefix} [{index}]{progress_message_suffix}..."
         percent = (cur * 100) / total
         progress.print(msg, f"{cur}/{total} docs [{percent:.1f}% done]")
+
