@@ -31,6 +31,7 @@ from osbenchmark.utils import console
 
 from time import sleep
 from tqdm import tqdm
+# import timeit
 
 
 DOCS_COMPRESSOR = bz2.BZ2Compressor
@@ -84,6 +85,7 @@ def multiples_extraction(number_of_docs_in_index, output_path, index, client, mu
         docs_path = get_doc_outpath(output_path, index)
         dump_documents_for_test_mode(client, index, get_doc_outpath(output_path, index, "-1k"), number_of_docs_in_index)
 
+        # console.info(timeit.timeit(lambda: dump_documents_with_multiple(client, index, docs_path, number_of_docs_in_index, multiple), setup="pass", number=1))
         num_of_extracted_docs = dump_documents_with_multiple(client, index, docs_path, number_of_docs_in_index, multiple)
         amount_of_docs_to_extract = (number_of_docs_in_index // multiple)
 
@@ -204,6 +206,10 @@ def dump_documents_with_multiple(client, index, out_path, number_of_docs_in_inde
 
             progress_bar = tqdm(range(number_of_docs_to_fetch), desc=progress_message, ascii=' >=', bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
 
+            # lst = [doc for doc in helpers.scan(client, query=query, index=index)]
+            # logger.info("List from scan: [%s]", lst)
+            # sleep(200)
+
             # bytes_bar = tqdm(unit = 'B', ascii = True, unit_scale = True)
             for n, doc in enumerate(helpers.scan(client, query=query, index=index), start=1):
                 if (n % multiple) != 0:
@@ -219,7 +225,7 @@ def dump_documents_with_multiple(client, index, out_path, number_of_docs_in_inde
 
                 outfile.write(data)
                 comp_outfile.write(compressor.compress(data))
-                sleep(0.1)
+                # sleep(0.1)
                 progress_bar.update(1)
 
 
