@@ -98,6 +98,8 @@ install_requires = [
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
     "boto3==1.10.32",
+    "tqdm==4.66.1"
+    # License: MIT
 ]
 
 tests_require = [

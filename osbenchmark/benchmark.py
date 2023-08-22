@@ -187,6 +187,13 @@ def create_arg_parser():
         metavar="KEY:VAL",
         help="Map of index name and integer doc count to extract. Ensure that index name also exists in --indices parameter. " +
         "To specify several indices and doc counts, use format: <index1>:<doc_count1> <index2>:<doc_count2> ...")
+    create_workload_parser.add_argument(
+        "--multiples-to-extract",
+        action=opts.StoreKeyPairAsDict,
+        nargs='+',
+        metavar="KEY:VAL",
+        help="Map of index name and an integer, representing the multiple a doc needs to be to be extracted. Ensure that index name also exists in --indices parameter. " +
+        "To specify several indices and doc counts, use format: <index1>:<multiple1> <index2>:<multiple2> ...")
 
     generate_parser = subparsers.add_parser("generate", help="Generate artifacts")
     generate_parser.add_argument(
@@ -914,6 +921,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
         elif sub_command == "create-workload":
             cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
             cfg.add(config.Scope.applicationOverride, "generator", "number_of_docs", args.number_of_docs)
+            cfg.add(config.Scope.applicationOverride, "generator", "multiples_to_extract", args.multiples_to_extract)
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             cfg.add(config.Scope.applicationOverride, "workload", "workload.name", args.workload)
             cfg.add(config.Scope.applicationOverride, "workload", "custom_queries", args.custom_queries)

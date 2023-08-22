@@ -59,12 +59,35 @@ def validate_indices_docs_map(indices, indices_docs_map, docs_were_requested):
                 "Ensure that indices from all <index>:<doc_count> pairs exist in --indices."
             )
 
-def extract_mappings_and_corpora(client, output_path, indices_to_extract, indices_docs_map):
+def validate_indices_multiples_map(indices, indices_multiples_map, multiples_enabled):
+    if not multiples_enabled:
+        return
+
+    if len(indices) < len(indices_multiples_map):
+        raise exceptions.SystemSetupError(
+            "Number of <index>:<doc_count> pairs exceeds number of indices in --indices. " +
+            "Ensure number of <index>:<doc_count> pairs is less than or equal to number of indices in --indices."
+        )
+
+    for index_name in indices_multiples_map:
+        if index_name not in indices:
+            raise exceptions.SystemSetupError(
+                "Index from <index>:<multiples> pair was not found in --indices. " +
+                "Ensure that indices from all <index>:<multiples> pairs exist in --indices."
+            )
+
+
+def extract_mappings_and_corpora(client, output_path, indices_to_extract, indices_docs_map, indices_multiples_map):
     indices = []
     corpora = []
     docs_were_requested = indices_docs_map is not None and len(indices_docs_map) > 0
+    multiples_enabled = indices_multiples_map is not None and len(indices_multiples_map) > 0
+
+    if docs_were_requested and multiples_enabled:
+        raise exceptions.SystemSetupError("Parameters --number-of-docs and --multiples-to-extract cannot be used simultaneously. Choose one or the other.")
 
     validate_indices_docs_map(indices_to_extract, indices_docs_map, docs_were_requested)
+    validate_indices_multiples_map(indices_to_extract, indices_multiples_map, multiples_enabled)
 
     # first extract index metadata (which is cheap) and defer extracting data to reduce the potential for
     # errors due to invalid index names late in the process.
@@ -87,8 +110,15 @@ def extract_mappings_and_corpora(client, output_path, indices_to_extract, indice
                     f"The string [{indices_docs_map.get(i['name'])}] in <index>:<doc_count> pair cannot be converted to an integer."
                 )
 
+        if multiples_enabled and i["name"] in indices_multiples_map:
+            try:
+                multiple_to_extract = int(indices_multiples_map.get(i["name"]))
+            except ValueError:
+                raise exceptions.InvalidSyntax(
+                    f"The string [{indices_multiples_map.get(i['name'])}] in <index>:<doc_count> pair cannot be converted to an integer."
+                )
         logging.getLogger(__name__).info("Extracting [%s] docs for index [%s]", custom_docs_to_extract, i["name"])
-        c = corpus.extract(client, output_path, i["name"], custom_docs_to_extract)
+        c = corpus.extract(client, output_path, i["name"], custom_docs_to_extract, multiple_to_extract)
         if c:
             corpora.append(c)
 
@@ -117,6 +147,7 @@ def create_workload(cfg):
     target_hosts = cfg.opts("client", "hosts")
     client_options = cfg.opts("client", "options")
     number_of_docs = cfg.opts("generator", "number_of_docs")
+    multiples_to_extract = cfg.opts("generator", "multiples_to_extract")
     unprocessed_custom_queries = cfg.opts("workload", "custom_queries")
 
     custom_queries = process_custom_queries(unprocessed_custom_queries)
@@ -132,8 +163,9 @@ def create_workload(cfg):
     output_path = os.path.abspath(os.path.join(io.normalize_path(root_path), workload_name))
     io.ensure_dir(output_path)
 
+    logger.info("Multiples to extract [%s]", multiples_to_extract)
     # Extract mappings and corpora
-    indices, corpora = extract_mappings_and_corpora(client, output_path, indices, number_of_docs)
+    indices, corpora = extract_mappings_and_corpora(client, output_path, indices, number_of_docs, multiples_to_extract)
 
     if len(indices) == 0:
         raise RuntimeError("Failed to extract any indices for workload!")
