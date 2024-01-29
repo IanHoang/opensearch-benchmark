@@ -142,7 +142,7 @@ def test_extract_concurrent(client, mo):
     with mock.patch("os.stat") as osstat:
         osstat.side_effect = set_corp_size
         res = corpus.extract(
-            client, outdir, index, concurrent=True, threads=4, bsize=100
+            client, outdir, index, concurrent=True, threads=4, batch_size=100
         )
     assert mo.call_count == 40
     mo.assert_has_calls(

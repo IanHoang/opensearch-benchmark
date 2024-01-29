@@ -201,10 +201,10 @@ def create_arg_parser():
             f"If no argument is provided to --threads parameter, defaults to {corpus.DEFAULT_CONCURRENT_THREADS}. ",
     )
     create_workload_parser.add_argument(
-        "--bsize",
+        "--batch-size",
         type=positive_number,
         default=0,  # 0 means dynamic batching within corpus.py `dump_documents_range()`
-        help="Batch size to use for dumping documents (default: false)",
+        help="Number of hits to return for dump query that runs to collect and dump documents (default: 0)",
     )
     create_workload_parser.add_argument(
         "--custom-dump-query",
@@ -919,7 +919,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "workload", "custom_queries", args.custom_queries)
             cfg.add(config.Scope.applicationOverride, "workload", "concurrent", args.concurrent)
             cfg.add(config.Scope.applicationOverride, "workload", "threads", args.threads)
-            cfg.add(config.Scope.applicationOverride, "workload", "bsize", args.bsize)
+            cfg.add(config.Scope.applicationOverride, "workload", "batch_size", args.batch_size)
             cfg.add(config.Scope.applicationOverride, "workload", "custom_dump_query", args.custom_dump_query)
 
             configure_connection_params(arg_parser, args, cfg)

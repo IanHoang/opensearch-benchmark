@@ -64,7 +64,7 @@ def extract(
         number_of_docs_requested=None,
         concurrent=False,
         threads=DEFAULT_CONCURRENT_THREADS,
-        bsize=0,
+        batch_size=0,
         custom_dump_query=DEFAULT_DUMP_QUERY
     ):
     """
@@ -76,7 +76,7 @@ def extract(
     :param numer_of_docs_requested: Specific number of docs requested instead of all (default: None)
     :param concurrent: Use threads to concurrently dump documents (default: false)
     :param threads: Number of threads to use if concurrent is set to true (default: 8)
-    :param bsize: Number of hits that should be returned in response (default: 0)
+    :param batch_size: Number of hits that should be returned in response (default: 0)
     :param custom_dump_query: Custom dump query used to collect and dump documents (default: match_all query)
     :return: dict of properties describing the corpus for templates
     """
@@ -100,7 +100,7 @@ def extract(
             min(total_docs, 1000),
             progress_message_suffix="for test mode",
             threads=threads,
-            bsize=bsize,
+            batch_size=batch_size,
             custom_dump_query=custom_dump_query,
         )
 
@@ -112,7 +112,7 @@ def extract(
             docs_path,
             total_docs,
             threads=threads,
-            bsize=bsize,
+            batch_size=batch_size,
             custom_dump_query=custom_dump_query,
         )
         return template_vars(index, docs_path, total_docs)
@@ -129,7 +129,7 @@ def dump_documents_range(
     start_doc,
     end_doc,
     total_docs,
-    bsize=0,
+    batch_size=0,
     custom_dump_query=DEFAULT_DUMP_QUERY
     ):
     """
@@ -141,7 +141,7 @@ def dump_documents_range(
     :param start_doc: Start index of the document chunk
     :param end_doc: End index of the document chunk
     :param total_docs: Total number of documents (default: All)
-    :param bsize: Number of hits that should be returned in response (default: 0)
+    :param batch_size: Number of hits that should be returned in response (default: 0)
     :param custom_dump_query: Custom dump query used to retrieve and dump documents. (default: match_all query)
     :return: dict of properties describing the corpus for templates
     """
@@ -156,7 +156,7 @@ def dump_documents_range(
         with open(comp_outpath, "wb") as comp_outfile:
             max_doc = total_docs if end_doc > total_docs else end_doc
 
-            batch_size = bsize if bsize > 0 else (max_doc - start_doc) // 5
+            batch_size = batch_size if batch_size > 0 else (max_doc - start_doc) // 5
             if batch_size < 1:
                 batch_size = 1
             search_after = None
@@ -214,7 +214,7 @@ def dump_documents(
     number_of_docs,
     progress_message_suffix="",
     threads=DEFAULT_CONCURRENT_THREADS,
-    bsize=0,
+    batch_size=0,
     custom_dump_query=DEFAULT_DUMP_QUERY,
     ):
     """
@@ -228,12 +228,12 @@ def dump_documents(
     :param output_path: Destination directory for corpus dump
     :param number_of_docs: Total number of documents
     :param threads: Number of threads for dumping documents from indices (default: 8)
-    :param bsize: Number of hits that should be returned in response (default: 0)
+    :param batch_size: Number of hits that should be returned in response (default: 0)
     :param custom_dump_query: Custom query used to retrieve and dump documents. (default: match_all query)
     """
     if concurrent:
         threads = int(threads)
-        bsize = int(bsize)
+        batch_size = int(batch_size)
         with tqdm(
             total=number_of_docs,
             desc=f"Extracting documents from {index}"
@@ -251,7 +251,7 @@ def dump_documents(
                         output_path,
                         *args,
                         number_of_docs,
-                        bsize,
+                        batch_size,
                         custom_dump_query,
                     ),
                     ranges,

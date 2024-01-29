@@ -59,7 +59,7 @@ def extract_mappings_and_corpora(
         indices_docs_map,
         concurrent=False,
         threads=None,
-        bsize=None,
+        batch_size=None,
         custom_dump_query=None,
     ):
     indices = []
@@ -97,7 +97,7 @@ def extract_mappings_and_corpora(
             custom_docs_to_extract,
             concurrent,
             threads,
-            bsize,
+            batch_size,
             custom_dump_query,)
         if c:
             corpora.append(c)
@@ -159,7 +159,7 @@ def create_workload(cfg):
     templates_path = os.path.join(cfg.opts("node", "benchmark.root"), "resources")
     concurrent = cfg.opts("workload", "concurrent")
     threads = cfg.opts("workload", "threads")
-    bsize = cfg.opts("workload", "bsize")
+    batch_size = cfg.opts("workload", "batch_size")
     custom_dump_query = cfg.opts("workload", "custom_dump_query")
 
     if threads and not concurrent:
@@ -205,7 +205,7 @@ def create_workload(cfg):
         number_of_docs,
         concurrent,
         threads,
-        bsize,
+        batch_size,
         custom_dump_query)
     logger.info("Finished extracting indices and corpora")
 
