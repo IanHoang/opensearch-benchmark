@@ -38,7 +38,7 @@ from osbenchmark import version, actor, config, paths, \
     test_execution_orchestrator, results_publisher, \
         metrics, workload, exceptions, log
 from osbenchmark.builder import provision_config, builder
-from osbenchmark.workload_generator import workload_generator
+from osbenchmark.workload_generator import workload_generator, corpus
 from osbenchmark.utils import io, convert, process, console, net, opts, versions
 
 
@@ -187,6 +187,32 @@ def create_arg_parser():
         metavar="KEY:VAL",
         help="Map of index name and integer doc count to extract. Ensure that index name also exists in --indices parameter. " +
         "To specify several indices and doc counts, use format: <index1>:<doc_count1> <index2>:<doc_count2> ...")
+    create_workload_parser.add_argument(
+        "--concurrent",
+        action="store_true",
+        help="Whether or not to generate workload concurrently (default: false)",
+    )
+    create_workload_parser.add_argument(
+        "--threads",
+        type=positive_number,
+        default=corpus.DEFAULT_CONCURRENT_THREADS,
+        help="Number of threads used to extract documents from indices and dump to workload. --threads parameter " + \
+            "should be used with --concurrent flag. By default, --threads is disabled. " + \
+            f"If no argument is provided to --threads parameter, defaults to {corpus.DEFAULT_CONCURRENT_THREADS}. ",
+    )
+    create_workload_parser.add_argument(
+        "--bsize",
+        type=positive_number,
+        default=0,  # 0 means dynamic batching within corpus.py `dump_documents_range()`
+        help="Batch size to use for dumping documents (default: false)",
+    )
+    create_workload_parser.add_argument(
+        "--custom-dump-query",
+        action=opts.ProcessDumpQuery,
+        type=argparse.FileType("r"),
+        help="File path for custom dumping query used to collect and dump documents. " + \
+            "By default, uses match_all query to collect all documents and dump them into corpus.",
+    )
 
     compare_parser = subparsers.add_parser("compare", help="Compare two test_executions")
     compare_parser.add_argument(
@@ -891,6 +917,11 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             cfg.add(config.Scope.applicationOverride, "workload", "workload.name", args.workload)
             cfg.add(config.Scope.applicationOverride, "workload", "custom_queries", args.custom_queries)
+            cfg.add(config.Scope.applicationOverride, "workload", "concurrent", args.concurrent)
+            cfg.add(config.Scope.applicationOverride, "workload", "threads", args.threads)
+            cfg.add(config.Scope.applicationOverride, "workload", "bsize", args.bsize)
+            cfg.add(config.Scope.applicationOverride, "workload", "custom_dump_query", args.custom_dump_query)
+
             configure_connection_params(arg_parser, args, cfg)
 
             workload_generator.create_workload(cfg)

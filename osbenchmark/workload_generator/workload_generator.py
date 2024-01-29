@@ -52,7 +52,16 @@ def validate_indices_docs_map(indices, indices_docs_map, docs_were_requested):
                 "Ensure that indices from all <index>:<doc_count> pairs exist in --indices."
             )
 
-def extract_mappings_and_corpora(client, output_path, indices_to_extract, indices_docs_map):
+def extract_mappings_and_corpora(
+        client,
+        output_path,
+        indices_to_extract,
+        indices_docs_map,
+        concurrent=False,
+        threads=None,
+        bsize=None,
+        custom_dump_query=None,
+    ):
     indices = []
     corpora = []
     docs_were_requested = indices_docs_map is not None and len(indices_docs_map) > 0
@@ -81,7 +90,15 @@ def extract_mappings_and_corpora(client, output_path, indices_to_extract, indice
                 )
 
         logging.getLogger(__name__).info("Extracting [%s] docs for index [%s]", custom_docs_to_extract, i["name"])
-        c = corpus.extract(client, output_path, i["name"], custom_docs_to_extract)
+        c = corpus.extract(
+            client,
+            output_path,
+            i["name"],
+            custom_docs_to_extract,
+            concurrent,
+            threads,
+            bsize,
+            custom_dump_query,)
         if c:
             corpora.append(c)
 
@@ -140,6 +157,15 @@ def create_workload(cfg):
     number_of_docs = cfg.opts("generator", "number_of_docs")
     unprocessed_custom_queries = cfg.opts("workload", "custom_queries")
     templates_path = os.path.join(cfg.opts("node", "benchmark.root"), "resources")
+    concurrent = cfg.opts("workload", "concurrent")
+    threads = cfg.opts("workload", "threads")
+    bsize = cfg.opts("workload", "bsize")
+    custom_dump_query = cfg.opts("workload", "custom_dump_query")
+
+    if threads and not concurrent:
+        raise exceptions.WorkloadConfigError(
+            "Cannot set --threads without setting --concurrent."
+        )
 
     # Process custom queries
     custom_queries = process_custom_queries(unprocessed_custom_queries)
@@ -172,7 +198,15 @@ def create_workload(cfg):
 
     # Extract Indices and Corpora
     logger.info("Extracting indices and corpora")
-    indices, corpora = extract_mappings_and_corpora(client, output_path, indices, number_of_docs)
+    indices, corpora = extract_mappings_and_corpora(
+        client,
+        output_path,
+        indices,
+        number_of_docs,
+        concurrent,
+        threads,
+        bsize,
+        custom_dump_query)
     logger.info("Finished extracting indices and corpora")
 
     if len(indices) == 0:

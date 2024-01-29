@@ -98,7 +98,7 @@ def bulleted_list_of(src_list):
 
 
 def double_quoted_list_of(src_list):
-    return ["\"{}\"".format(param) for param in src_list]
+    return ['"{}"'.format(param) for param in src_list]
 
 
 def make_list_of_close_matches(word_list, all_possibilities):
@@ -125,6 +125,7 @@ class StoreKeyPairAsDict(argparse.Action):
     """
     def __call__(self, parser, namespace, values, option_string=None):
         custom_dict = {}
+        values = values[0].split(",")
         for kv in values:
             try:
                 k,v = kv.split(":")
@@ -137,6 +138,21 @@ class StoreKeyPairAsDict(argparse.Action):
 
         return custom_dict
 
+class ProcessDumpQuery(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        query = {}
+        try:
+            with open(str(values.name), "r") as f:
+                query = json.load(f)
+                setattr(namespace, self.dest, query)
+        except Exception as e:
+            print(e)
+            setattr(namespace, self.dest, "{}")
+            raise exceptions.QueryProcessingError(
+                "ProcessDumpQuery: Could not process query from file."
+            )
+
+        return query
 
 class ConnectOptions:
     """

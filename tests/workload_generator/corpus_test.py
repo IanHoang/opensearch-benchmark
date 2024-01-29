@@ -56,7 +56,8 @@ def test_extract(client, mo):
                     "_index": "test",
                     "_id": "0",
                     "_score": 0,
-                    "_source": doc
+                    "_source": doc,
+                    "sort": [0],
                 }
             ]
         }
@@ -79,12 +80,16 @@ def test_extract(client, mo):
     with mock.patch("os.stat") as osstat:
         osstat.side_effect = set_corp_size
         res = corpus.extract(client, outdir, index)
-    assert mo.call_count == 4
-    mo.assert_has_calls([call("/abs/outpath/to/workloads/test-documents.json", "wb"),
-                         call("/abs/outpath/to/workloads/test-documents.json.bz2", "wb"),
-                         call("/abs/outpath/to/workloads/test-documents-1k.json", "wb"),
-                         call("/abs/outpath/to/workloads/test-documents-1k.json.bz2", "wb")
-                         ], any_order=True)
+    assert mo.call_count == 12
+    mo.assert_has_calls(
+        [
+            call("/abs/outpath/to/workloads/test-documents.json", "wb"),
+            call("/abs/outpath/to/workloads/test-documents.json.bz2", "wb"),
+            call("/abs/outpath/to/workloads/test-documents-1k.json", "wb"),
+            call("/abs/outpath/to/workloads/test-documents-1k.json.bz2", "wb"),
+        ],
+        any_order=True,
+    )
 
     assert res == {
         "filename": "test-documents.json.bz2",
@@ -93,6 +98,70 @@ def test_extract(client, mo):
         "index_name": "test",
         "doc_count": 1001,
         "uncompressed_bytes": 1000
+    }
+
+    file_mock = mo.return_value
+    file_mock.assert_has_calls([call.write(doc_data)])
+
+@mock.patch("builtins.open", new_callable=mock.mock_open)
+@mock.patch("opensearchpy.OpenSearch")
+def test_extract_concurrent(client, mo):
+    doc = {"field1": "stuff", "field2": "things"}
+    doc_data = serialize_doc(doc)
+    client.count.return_value = {"count": 1501}
+    client.search.return_value = {
+        "_scroll_id": "uohialjrknf",
+        "_shards": {"successful": 1, "total": 1, "skipped": 0},
+        "hits": {
+            "hits": [
+                {
+                    "_index": "test",
+                    "_id": "0",
+                    "_score": 0,
+                    "_source": doc,
+                    "sort": [0],
+                }
+            ]
+        },
+    }
+
+    def set_corp_size(*args, **kwargs):
+        path = args[0]
+        mockstat = mock.Mock()
+        if ".bz2" in path:
+            mockstat.st_size = 500
+        else:
+            mockstat.st_size = 1000
+        return mockstat
+
+    client.scroll.return_value = {}
+
+    index = "test"
+    outdir = "/abs/outpath/to/workloads/"
+
+    with mock.patch("os.stat") as osstat:
+        osstat.side_effect = set_corp_size
+        res = corpus.extract(
+            client, outdir, index, concurrent=True, threads=4, bsize=100
+        )
+    assert mo.call_count == 40
+    mo.assert_has_calls(
+        [
+            call("/abs/outpath/to/workloads/test-documents.json", "wb"),
+            call("/abs/outpath/to/workloads/test-documents.json.bz2", "wb"),
+            call("/abs/outpath/to/workloads/test-documents-1k.json", "wb"),
+            call("/abs/outpath/to/workloads/test-documents-1k.json.bz2", "wb"),
+        ],
+        any_order=True,
+    )
+
+    assert res == {
+        "filename": "test-documents.json.bz2",
+        "path": "/abs/outpath/to/workloads/test-documents.json.bz2",
+        "compressed_bytes": 500,
+        "index_name": "test",
+        "doc_count": 1501,
+        "uncompressed_bytes": 1000,
     }
 
     file_mock = mo.return_value

@@ -106,6 +106,8 @@ install_requires = [
     # License: BSD
     # Required for knnvector workload
     "numpy==1.24.2",
+    # License: MIT
+    "tqdm==4.66.1",
 ]
 
 tests_require = [

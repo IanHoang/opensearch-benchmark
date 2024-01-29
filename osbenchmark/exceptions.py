@@ -107,6 +107,10 @@ class WorkloadConfigError(BenchmarkError):
     that can't be set
     """
 
+class QueryProcessingError(BenchmarkError):
+    """
+    Thrown when there is an error processing a query from the file path given
+    """
 
 class NotFound(BenchmarkError):
     pass
