@@ -195,7 +195,8 @@ def create_arg_parser():
     create_workload_parser.add_argument(
         "--threads",
         type=positive_number,
-        default=corpus.DEFAULT_CONCURRENT_THREADS,
+        nargs='?',
+        const=corpus.DEFAULT_CONCURRENT_THREADS,
         help="Number of threads used to extract documents from indices and dump to workload. --threads parameter " + \
             "should be used with --concurrent flag. By default, --threads is disabled. " + \
             f"If no argument is provided to --threads parameter, defaults to {corpus.DEFAULT_CONCURRENT_THREADS}. ",
