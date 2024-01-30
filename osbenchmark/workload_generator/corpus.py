@@ -156,11 +156,11 @@ def dump_documents_range(
     logger = logging.getLogger(__name__)
 
     compressor = DOCS_COMPRESSOR()
-    output_path = f"{output_path}_{start_doc}_{end_doc}" + OUTPUT_EXT
-    comp_output_path = output_path + COMP_EXT
+    output_path_with_extension = f"{output_path}_{start_doc}_{end_doc}" + OUTPUT_EXT
+    comp_output_path_with_extension = output_path_with_extension + COMP_EXT
 
-    with open(output_path, "wb") as outfile:
-        with open(comp_output_path, "wb") as comp_outfile:
+    with open(output_path_with_extension, "wb") as outfile:
+        with open(comp_output_path_with_extension, "wb") as comp_outfile:
             max_doc = total_docs if end_doc > total_docs else end_doc
 
             batch_size = batch_size if batch_size > 0 else (max_doc - start_doc) // 5
@@ -202,7 +202,7 @@ def dump_documents_range(
 
                     outfile.write(data)
                     comp_outfile.write(compressor.compress(data))
-                    logger.info("Wrote data to [%s] and [%s]", output_path, comp_output_path)
+                    logger.info("Wrote data to [%s] and [%s]", output_path_with_extension, comp_output_path_with_extension)
 
                     n += 1
                     pbar.update(1)
@@ -211,7 +211,7 @@ def dump_documents_range(
 
             comp_outfile.write(compressor.flush())
 
-    logger.info("Finished dumping corpus for index [%s] to [%s].", index, output_path)
+    logger.info("Finished dumping corpus for index [%s] to [%s].", index, output_path_with_extension)
 
 
 def dump_documents(
