@@ -98,7 +98,7 @@ def extract_mappings_and_corpora(
             concurrent,
             threads,
             batch_size,
-            custom_dump_query,)
+            custom_dump_query)
         if c:
             corpora.append(c)
 
@@ -164,7 +164,7 @@ def create_workload(cfg):
 
     if threads and not concurrent:
         raise exceptions.WorkloadConfigError(
-            "Cannot set --threads without setting --concurrent."
+            f"Cannot set --threads {threads} without --concurrent flag"
         )
 
     # Process custom queries

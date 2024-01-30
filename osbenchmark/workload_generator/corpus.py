@@ -38,23 +38,25 @@ COMP_EXT = ".bz2"
 OUTPUT_EXT = ".json"
 
 DEFAULT_CONCURRENT_THREADS=8
-DEFAULT_DUMP_QUERY='{"match_all": {}}'
+DEFAULT_DUMP_QUERY={"match_all": {}}
 
 
 def template_vars(index_name, output_path, doc_count):
-    comp_outpath = output_path + COMP_EXT
+    comp_path_with_extension = output_path + OUTPUT_EXT + COMP_EXT
+    output_path_with_extension = output_path + OUTPUT_EXT
+
     return {
         "index_name": index_name,
-        "filename": os.path.basename(comp_outpath),
-        "path": comp_outpath,
+        "filename": os.path.basename(comp_path_with_extension),
+        "path": comp_path_with_extension,
         "doc_count": doc_count,
-        "uncompressed_bytes": os.path.getsize(output_path),
-        "compressed_bytes": os.path.getsize(comp_outpath)
+        "uncompressed_bytes": os.path.getsize(output_path_with_extension),
+        "compressed_bytes": os.path.getsize(comp_path_with_extension)
     }
 
 
 def get_doc_outpath(outdir, name, suffix=""):
-    return os.path.join(outdir, f"{name}-documents{suffix}.json")
+    return os.path.join(outdir, f"{name}-documents{suffix}")
 
 
 def extract(
@@ -63,9 +65,9 @@ def extract(
         index,
         number_of_docs_requested=None,
         concurrent=False,
-        threads=DEFAULT_CONCURRENT_THREADS,
+        threads=None,
         batch_size=0,
-        custom_dump_query=DEFAULT_DUMP_QUERY
+        custom_dump_query=None
     ):
     """
     Scroll an index with a match-all query, dumping document source to ``outdir/documents.json``.
@@ -82,15 +84,19 @@ def extract(
     """
 
     logger = logging.getLogger(__name__)
+    logger.info("Output Path [%s]", output_path)
 
     number_of_docs = client.count(index=index)["count"]
 
     total_docs = number_of_docs if not number_of_docs_requested else min(number_of_docs, number_of_docs_requested)
 
+    if custom_dump_query is None:
+        custom_dump_query = DEFAULT_DUMP_QUERY
+
     if total_docs > 0:
         logger.info("[%d] total docs in index [%s]. Extracting [%s] docs.", number_of_docs, index, total_docs)
         docs_path = get_doc_outpath(output_path, index)
-
+        logger.info("Docs Path [%s]", docs_path)
         # Dump documents that are used for --test-mode flag
         dump_documents(
             concurrent,
@@ -115,6 +121,7 @@ def extract(
             batch_size=batch_size,
             custom_dump_query=custom_dump_query,
         )
+
         return template_vars(index, docs_path, total_docs)
     else:
         logger.info("Skipping corpus extraction fo index [%s] as it contains no documents.", index)
@@ -130,7 +137,7 @@ def dump_documents_range(
     end_doc,
     total_docs,
     batch_size=0,
-    custom_dump_query=DEFAULT_DUMP_QUERY
+    custom_dump_query=None
     ):
     """
     Extract documents in the range of start_doc and end_doc and write to individual files
@@ -150,10 +157,10 @@ def dump_documents_range(
 
     compressor = DOCS_COMPRESSOR()
     output_path = f"{output_path}_{start_doc}_{end_doc}" + OUTPUT_EXT
-    comp_outpath = output_path + COMP_EXT
+    comp_output_path = output_path + COMP_EXT
 
     with open(output_path, "wb") as outfile:
-        with open(comp_outpath, "wb") as comp_outfile:
+        with open(comp_output_path, "wb") as comp_outfile:
             max_doc = total_docs if end_doc > total_docs else end_doc
 
             batch_size = batch_size if batch_size > 0 else (max_doc - start_doc) // 5
@@ -195,6 +202,7 @@ def dump_documents_range(
 
                     outfile.write(data)
                     comp_outfile.write(compressor.compress(data))
+                    logger.info("Wrote data to [%s] and [%s]", output_path, comp_output_path)
 
                     n += 1
                     pbar.update(1)
@@ -213,7 +221,7 @@ def dump_documents(
     output_path,
     number_of_docs,
     progress_message_suffix="",
-    threads=DEFAULT_CONCURRENT_THREADS,
+    threads=None,
     batch_size=0,
     custom_dump_query=DEFAULT_DUMP_QUERY,
     ):
