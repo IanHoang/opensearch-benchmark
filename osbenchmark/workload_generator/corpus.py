@@ -26,8 +26,10 @@ import bz2
 import json
 import logging
 import os
+import opensearchpy
 
 from osbenchmark.utils import console
+from osbenchmark import exceptions
 
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
@@ -137,7 +139,7 @@ def dump_documents_range(
     end_doc,
     total_docs,
     batch_size=0,
-    custom_dump_query=None
+    custom_dump_query=DEFAULT_DUMP_QUERY
     ):
     """
     Extract documents in the range of start_doc and end_doc and write to individual files
@@ -185,29 +187,38 @@ def dump_documents_range(
                         "from": start_doc,
                     }
 
-                response = client.search(index=index, body=query)
-                hits = response["hits"]["hits"]
+                try:
+                    response = client.search(index=index, body=query)
+                    hits = response["hits"]["hits"]
 
-                if not hits:
-                    break
-
-                for doc in hits:
-                    try:
-                        search_after = doc["sort"]
-                    except KeyError:
-                        logger.info("Error in response format: %s", doc)
-                    data = (
-                        json.dumps(doc["_source"], separators=(",", ":")) + "\n"
-                    ).encode("utf-8")
-
-                    outfile.write(data)
-                    comp_outfile.write(compressor.compress(data))
-                    logger.info("Wrote data to [%s] and [%s]", output_path_with_extension, comp_output_path_with_extension)
-
-                    n += 1
-                    pbar.update(1)
-                    if n >= (max_doc - start_doc):
+                    if not hits:
                         break
+
+                    for doc in hits:
+                        try:
+                            search_after = doc["sort"]
+                        except KeyError:
+                            logger.info("Error in response format: %s", doc)
+                        data = (
+                            json.dumps(doc["_source"], separators=(",", ":")) + "\n"
+                        ).encode("utf-8")
+
+                        outfile.write(data)
+                        comp_outfile.write(compressor.compress(data))
+                        logger.info("Wrote data to [%s] and [%s]", output_path_with_extension, comp_output_path_with_extension)
+
+                        n += 1
+                        pbar.update(1)
+                        if n >= (max_doc - start_doc):
+                            break
+
+                except opensearchpy.exceptions.RequestError as request_error:
+                    exception = "search_phase_execution_exception"
+                    reason = "Result window is too large"
+                    recommendation = "Recommendation: Ensure you are using --concurrent flag and --threads parameter."
+                    msg = exceptions.format_error_message(request_error, "OpenSearchpy", exception, reason, recommendation, logger)
+
+                    raise exceptions.OpenSearchRequestError(msg)
 
             comp_outfile.write(compressor.flush())
 

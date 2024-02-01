@@ -211,6 +211,7 @@ def create_arg_parser():
         "--custom-dump-query",
         action=opts.ProcessDumpQuery,
         type=argparse.FileType("r"),
+        default=corpus.DEFAULT_DUMP_QUERY,
         help="File path for custom dumping query used to collect and dump documents. " + \
             "By default, uses match_all query to collect all documents and dump them into corpus.",
     )
@@ -944,6 +945,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
             else:
                 msg += "\n%s%s" % ("\t" * nesting, str(e))
 
+        console.println("")
         console.error("Cannot %s. %s" % (sub_command, msg))
         console.println("")
         print_help_on_errors()

@@ -112,6 +112,11 @@ class QueryProcessingError(BenchmarkError):
     Thrown when there is an error processing a query from the file path given
     """
 
+class OpenSearchRequestError(BenchmarkError):
+    """
+    Thrown when there is an error that occurs in the OpenSearch Client Layer
+    """
+
 class NotFound(BenchmarkError):
     pass
 
@@ -128,3 +133,22 @@ class ConfigurationError(BenchmarkError):
     Attributes:
         message -- explanation of the error
     """
+
+def format_error_message(
+        request_error,
+        error_derived_package,
+        conditional_exception,
+        conditional_reason,
+        recommendation,
+        logger
+    ):
+    logger.error("Error [%s] and error status code [%s]", request_error, request_error.status_code)
+    logger.error("Error Reason: [%s]", request_error.info["error"]["root_cause"][0]["reason"])
+
+    request_type = type(request_error).__name__
+    message = f"\n{error_derived_package} {request_type} [{request_error.error}] with exit code [{request_error.status_code}]\n"
+
+    if conditional_exception in request_error.error and conditional_reason in request_error.info["error"]["root_cause"][0]["reason"]:
+        message += (len(recommendation) * "-")  + "\n" + recommendation
+
+    return message
