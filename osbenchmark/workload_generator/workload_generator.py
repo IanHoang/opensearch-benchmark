@@ -33,6 +33,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from osbenchmark import PROGRAM_NAME, exceptions
 from osbenchmark.client import OsClientFactory
 from osbenchmark.workload_generator import corpus, index
+from osbenchmark.workload_generator.custom_workload import CustomWorkload, CustomQueryBuilder, TemplateProcessor
 from osbenchmark.utils import io, opts, console
 
 def validate_indices_docs_map(indices, indices_docs_map, docs_were_requested):
@@ -166,6 +167,7 @@ def create_workload(cfg):
         except OSError:
             logger.error("Had issues removing existing workload [%s] in path [%s]", workload_name, output_path)
 
+    # makes directory
     io.ensure_dir(output_path)
     io.ensure_dir(operations_path)
     io.ensure_dir(test_procedures_path)
@@ -205,3 +207,25 @@ def create_workload(cfg):
 
     console.println("")
     console.info(f"Workload {workload_name} has been created. Run it with: {PROGRAM_NAME} --workload-path={output_path}")
+
+def build_workload(cfg):
+    logger = logging.getLogger(__name__)
+    target_hosts = cfg.opts("client", "hosts")
+    client_options = cfg.opts("client", "options")
+    custom_queries = cfg.opts("workload", "custom_queries")
+    output_path = cfg.opts("generator", "output.path")
+
+    # If statements to choose type of concurrent corpus retriever (concurrent vs asyncio and python vs go)
+    # Initialize dependencies and objects
+    os_client: OsClientFactory = OsClientFactory(hosts=target_hosts.all_hosts[opts.TargetHosts.DEFAULT],
+                             client_options=client_options.all_client_options[opts.TargetHosts.DEFAULT]).create()
+    template_processor: TemplateProcessor = TemplateProcessor(output_path, cfg)
+    custom_query_builder: CustomQueryBuilder = CustomQueryBuilder(custom_queries)
+    custom_workload: CustomWorkload = CustomWorkload(cfg, os_client, template_processor, custom_query_builder)
+
+    custom_workload.create_workload()
+
+    # Create workload directories
+
+    # Process Queries
+
