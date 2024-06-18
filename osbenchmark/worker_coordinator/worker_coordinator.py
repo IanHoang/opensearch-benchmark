@@ -659,6 +659,8 @@ class WorkerCoordinator:
         self.telemetry.on_benchmark_start()
         self.logger.info("Cluster-level telemetry devices are now attached.")
 
+        self.logger.info("Schedule before Allocator: %s", self.test_procedure.schedule)
+        self.logger.info("Target: [%s]", self.target)
         allocator = Allocator(self.test_procedure.schedule)
         self.allocations = allocator.allocations
         self.number_of_steps = len(allocator.join_points) - 1
@@ -672,6 +674,7 @@ class WorkerCoordinator:
 
         worker_assignments = calculate_worker_assignments(self.load_worker_coordinator_hosts, allocator.clients)
         worker_id = 0
+        self.logger.info("Worker assignments: %s", worker_assignments)
         for assignment in worker_assignments:
             host = assignment["host"]
             for clients in assignment["workers"]:
@@ -684,10 +687,16 @@ class WorkerCoordinator:
                     for client_id in clients:
                         client_allocations.add(client_id, self.allocations[client_id])
                         self.clients_per_worker[client_id] = worker_id
+                    # Start worker
+                    self.logger.info("Worker [%s] client allocations [%s]", worker_id, client_allocations.allocations)
                     self.target.start_worker(worker, worker_id, self.config, self.workload, client_allocations)
                     self.workers.append(worker)
                     worker_id += 1
 
+                    self.logger.info("Workers: %s", self.workers)
+
+        self.logger.info("Updated Client Allocations: %s", client_allocations)
+        self.logger.info("Updated Workers: %s", self.workers)
         self.update_progress_message()
 
     def joinpoint_reached(self, worker_id, worker_local_timestamp, task_allocations):
@@ -945,6 +954,9 @@ def calculate_worker_assignments(host_configs, client_count):
     host_count = len(host_configs)
     clients_per_host = math.ceil(client_count / host_count)
     remaining_clients = client_count
+    logger = logging.getLogger(__name__)
+    logger.info("Host configs: [%s]", host_configs)
+    logger.info("Clients per host: [%s]", clients_per_host)
     for host_config in host_configs:
         # the last host might not need to simulate as many clients as the rest of the hosts as we eagerly
         # assign clients to hosts.
@@ -961,6 +973,7 @@ def calculate_worker_assignments(host_configs, client_count):
         # determine how many clients each worker should simulate
         for c in range(clients_on_this_host):
             clients_per_worker[c % workers_on_this_host] += 1
+            logger.info("Clients_per_worker: [%s]", clients_per_worker)
 
         # assign client ids to workers
         for client_count_for_worker in clients_per_worker:
@@ -969,6 +982,10 @@ def calculate_worker_assignments(host_configs, client_count):
             for c in range(client_idx, client_idx + client_count_for_worker):
                 worker_assignment.append(c)
             client_idx += client_count_for_worker
+
+        logger.info("Host config: [%s]", host_config)
+        logger.info("Workers_on_this_host or cores: [%s]", workers_on_this_host)
+        logger.info("Clients_on_this_host: [%s]", clients_on_this_host)
 
         remaining_clients -= clients_on_this_host
 
@@ -1782,6 +1799,7 @@ class Allocator:
 
     def __init__(self, schedule):
         self.schedule = schedule
+        self.logger = logging.getLogger(__name__)
 
     @property
     def allocations(self):
@@ -1799,16 +1817,20 @@ class Allocator:
         """
         max_clients = self.clients
         allocations = [None] * max_clients
+        self.logger.info("Allocations matrix: %s", allocations)
         for client_index in range(max_clients):
             allocations[client_index] = []
+        self.logger.info("Allocations matrix after client_index: %s", allocations)
         join_point_id = 0
         # start with an artificial join point to allow master to coordinate that all clients start at the same time
         next_join_point = JoinPoint(join_point_id)
         for client_index in range(max_clients):
             allocations[client_index].append(next_join_point)
         join_point_id += 1
+        self.logger.info("Allocations matrix after join points: %s", allocations)
 
         for task in self.schedule:
+            self.logger.info("Task: %s", task)
             start_client_index = 0
             clients_executing_completing_task = []
             for sub_task in task:

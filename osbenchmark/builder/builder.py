@@ -425,6 +425,7 @@ class BuilderActor(actor.BenchmarkActor):
         self.transition_when_all_children_responded(sender, msg, "cluster_stopping", "cluster_stopped", self.on_all_nodes_stopped)
 
     def on_all_nodes_started(self):
+        self.logger.info("Sending message to BenchmarkActor to notify that engine started")
         self.send(self.test_execution_orchestrator, EngineStarted(self.provision_config_revision))
 
     def reset_relative_time(self):

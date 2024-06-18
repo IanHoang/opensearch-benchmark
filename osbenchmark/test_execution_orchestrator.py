@@ -375,6 +375,7 @@ def run(cfg):
         raise exceptions.SystemSetupError(
             "Unknown pipeline [%s]. List the available pipelines with %s list pipelines." % (name, PROGRAM_NAME))
     try:
+        logger.info("Pipeline: %s", pipeline)
         pipeline(cfg)
     except exceptions.BenchmarkError as e:
         # just pass on our own errors. It should be treated differently on top-level
