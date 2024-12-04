@@ -25,8 +25,8 @@
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from osbenchmark.workload_generator.config import CustomWorkload
-from osbenchmark.workload_generator.extractors import IndexExtractor
+from osbenchmark.create_workload.config import CustomWorkload
+from osbenchmark.create_workload.extractors import IndexExtractor
 
 class TestIndexExtractor(TestCase):
 

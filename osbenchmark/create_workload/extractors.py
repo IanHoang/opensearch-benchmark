@@ -16,7 +16,7 @@ import opensearchpy.exceptions
 
 from osbenchmark import exceptions
 from osbenchmark.utils import console
-from osbenchmark.workload_generator.config import CustomWorkload
+from osbenchmark.create_workload.config import CustomWorkload
 
 DOCS_COMPRESSOR = bz2.BZ2Compressor
 COMP_EXT = ".bz2"

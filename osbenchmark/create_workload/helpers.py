@@ -16,7 +16,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from osbenchmark import exceptions
 from osbenchmark.utils import io, console
-from osbenchmark.workload_generator.config import CustomWorkload, Index
+from osbenchmark.create_workload.config import CustomWorkload, Index
 
 
 BASE_WORKLOAD = "base-workload"

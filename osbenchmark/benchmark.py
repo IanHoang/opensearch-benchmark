@@ -38,7 +38,7 @@ from osbenchmark import version, actor, config, paths, \
     test_execution_orchestrator, results_publisher, \
         metrics, workload, exceptions, log
 from osbenchmark.builder import provision_config, builder
-from osbenchmark.workload_generator import workload_generator
+from osbenchmark.create_workload.workload_generator import WorkloadGenerator
 from osbenchmark.utils import io, convert, process, console, net, opts, versions
 from osbenchmark import aggregator
 
@@ -1032,7 +1032,8 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "workload", "custom_queries", args.custom_queries)
             configure_connection_params(arg_parser, args, cfg)
 
-            workload_generator.create_workload(cfg)
+            workload_generator = workload_generator.WorkloadGenerator(cfg)
+            workload_generator.create_workload()
         elif sub_command == "info":
             configure_workload_params(arg_parser, args, cfg)
             workload.workload_info(cfg)

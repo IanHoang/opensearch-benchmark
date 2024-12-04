@@ -25,8 +25,8 @@ import json
 from unittest import mock, TestCase
 from unittest.mock import call, Mock
 
-from osbenchmark.workload_generator.config import CustomWorkload
-from osbenchmark.workload_generator.extractors import SequentialCorpusExtractor
+from osbenchmark.create_workload.config import CustomWorkload
+from osbenchmark.create_workload.extractors import SequentialCorpusExtractor
 
 class TestSequentialCorpusExtractor(TestCase):
 
