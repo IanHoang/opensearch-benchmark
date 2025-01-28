@@ -202,7 +202,7 @@ class TestCluster:
 
 
 class OsMetricsStore:
-    VERSION = "1.3.9"
+    VERSION = "2.5.0"
 
     def __init__(self):
         self.cluster = TestCluster("in-memory-it")
