@@ -48,10 +48,11 @@ class NestedGenerator(BaseGenerator):
         the value for nested fields area always an array of JSON objects.
         This is why it leverages the ObjectGenerator().
 
-        :param num_of_objs:
+        :param num_of_objs: generates a random number,
+        which will be used to determine the number of objects in the array
         :param kwargs: usually contains 'field' which will be provided to ObjectGenerator()
 
-        :return: list of generated dictionaries (or JSON objects)
+        :return: a list of generated dictionaries (or JSON objects)
         """
         obj_generator = ObjectGenerator()
         nested_objs = []
@@ -67,10 +68,11 @@ class ObjectGenerator(BaseGenerator):
         Generates a dictionary of fields and generated values.
         This is used for Nested and Object mapping field types.
 
-        :param kwargs: usually 'fields' will be in kwargs and is needed to cycle through all fields and use
-        their respective data generators to generate values
+        :param kwargs: usually 'fields' will be included in the kwargs.
+        'fields' is needed to cycle through all fields and use their
+        respective data generators to generate values.
 
-        :return: dictionary, which will be a JSON object
+        :return: a dictionary, which represents a JSON object
         """
         fields = kwargs.get('fields', {})
         generated_obj = {}
