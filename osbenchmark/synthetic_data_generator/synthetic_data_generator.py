@@ -36,6 +36,10 @@ class SyntheticDataGenerator:
                 data_generator = GeneratorTypes[blueprint["data_generator_type"].upper()]
                 data_generator_params = blueprint["params"]
 
+                # Recursively hydrate fields in nested or object mapping fields
+                if blueprint["data_generator_type"].upper() in ["NESTED", "OBJECT"]:
+                    data_generator_params["fields"] = SyntheticDataGenerator.hydrate_blueprint_with_lazy_evaluation(data_generator_params.get("fields", {}))
+
                 # Insert tuple with DataGenerator and its params
                 return (data_generator, data_generator_params)
 
@@ -53,26 +57,36 @@ class SyntheticDataGenerator:
     @staticmethod
     def generate_data(hydrated_blueprint: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Traverses through hydrated blueprint.
-        If encounters a DataGenerator, will invoke it to generate data
+        Recursively traverses through hydrated blueprint.
+        If encounters a DataGenerator, will invoke it to generate data.
 
         :param hydrated_blueprint: hydrated blueprint produced by hydrate_blueprint_with_lazy_evaluation() method
 
         :return: a dictionary representing a document with synthetic generated data
         """
+        logger = logging.getLogger(__name__)
         if isinstance(hydrated_blueprint, dict):
+            logger.info("Inside Generate Data Dict: %s", hydrated_blueprint)
             return {key: SyntheticDataGenerator.generate_data(value) for key, value in hydrated_blueprint.items()}
 
         elif isinstance(hydrated_blueprint, list):
+            logger.info("Inside Generate Data List: %s", hydrated_blueprint)
             return [SyntheticDataGenerator.generate_data(item) for item in hydrated_blueprint]
 
         elif isinstance(hydrated_blueprint, tuple):
             # Generate data with discovered Data Generator Type
             data_generator_type = hydrated_blueprint[0]
-            params = hydrated_blueprint[1]
 
             if isinstance(data_generator_type, GeneratorTypes):
-                return data_generator_type.generate(**params)
+                if data_generator_type in [GeneratorTypes.NESTED, GeneratorTypes.OBJECT]:
+                    # For nested and object mapping field types, the second entry in the tuple is the fields for the object. Provide them to the NestedGenerator and ObjectGenerator.
+                    object_fields = hydrated_blueprint[1]['fields']
+
+                    return data_generator_type.generate(fields=object_fields)
+                else:
+                    # All other generator types, the second entry in the tuple is just the params. Provide these two all other GeneratorTypes
+                    params = hydrated_blueprint[1]
+                    return data_generator_type.generate(**params)
         else:
             # just return the value as is
             return hydrated_blueprint
@@ -89,9 +103,11 @@ class SyntheticDataGenerator:
         """
         return [SyntheticDataGenerator.generate_data(hydrated_blueprint) for _ in range(chunk_size)]
 
+    @staticmethod
     def _is_value_a_data_generator(blueprint):
         return True if "data_generator_type" in blueprint and "params" in blueprint else False
 
+    @staticmethod
     def _is_value_static(blueprint):
         return True if "type" in blueprint and blueprint["type"] == "STATIC" else False
 
@@ -115,7 +131,7 @@ def orchestrate_data_generation(cfg):
 
     if user_confirmed_accurate_setup(sdg_config):
         user_hydrated_blueprint = SyntheticDataGenerator.hydrate_blueprint_with_lazy_evaluation(sdg_config.blueprint)
-        # print(user_hydrated_blueprint)
+        print(user_hydrated_blueprint)
         # print(json.dumps(user_hydrated_blueprint, indent=2, default=str))
 
         chunk_size = 1000
@@ -125,7 +141,9 @@ def orchestrate_data_generation(cfg):
         workers = get_cores_in_lg_host()
         dask_client = Client(n_workers=12, threads_per_worker=1)
 
-        results = SyntheticDataGenerator.generate_data_chunk(10, user_hydrated_blueprint)
+        logger.info("Generating!")
+
+        results = SyntheticDataGenerator.generate_data_chunk(2, user_hydrated_blueprint)
 
         for result in results:
             print(json.dumps(result, indent=2))

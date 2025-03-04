@@ -17,6 +17,7 @@ from osbenchmark.synthetic_data_generator.generators import *
 
 DEFAULT_MAX_CHUNK_SIZE=40_000_000_000
 DEFAULT_BATCH_SIZE=1000
+DEFAULT_NESTED_NUM_OF_OBJS = {"data_generator_type":"INTEGER","params":{"min_value": 1,"max_value": 10}}
 
 TYPE_MAPPING = {
     'text': 'KEYWORD',
@@ -31,6 +32,8 @@ TYPE_MAPPING = {
     'scaled_float': 'FLOAT',
     'date': 'DATE',
     'boolean': 'BOOLEAN',
+    'nested': 'NESTED',
+    'object': 'OBJECT',
     'binary': 'BINARY',
     'ip': 'IP_ADDRESS',
 }
@@ -45,6 +48,8 @@ class GeneratorTypes(Enum):
     INTEGER = IntegerGenerator()
     FLOAT = FloatGenerator()
     DATE = DateGenerator()
+    NESTED = NestedGenerator()
+    OBJECT = ObjectGenerator()
     TIMESTAMP = TimestampGenerator()
     IP_ADDRESS = IPAddressGenerator()
     # Other use-cases

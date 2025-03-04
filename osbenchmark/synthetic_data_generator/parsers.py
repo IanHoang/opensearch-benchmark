@@ -8,8 +8,9 @@
 
 import re
 import json
+import logging
 
-from osbenchmark.synthetic_data_generator.types import TYPE_MAPPING
+from osbenchmark.synthetic_data_generator.types import TYPE_MAPPING, DEFAULT_NESTED_NUM_OF_OBJS
 
 class TemplateDocumentParser:
     """
@@ -79,6 +80,7 @@ class TemplateDocumentParser:
                     return value
 
 class MappingParser:
+
     @staticmethod
     def parse_from_file(file_path):
         """
@@ -95,7 +97,11 @@ class MappingParser:
 
     @staticmethod
     def parse(input_data):
+        if 'mappings' in input_data:
+            # Users might copy the entire mappings file
+            return MappingParser._parse_mapping(input_data['mappings']['properties'])
         if 'properties' in input_data:
+            # Users might copy only the properties seciton
             return MappingParser._parse_mapping(input_data['properties'])
         elif 'index_patterns' in input_data:
             return MappingParser._parse_template(input_data)
@@ -104,17 +110,47 @@ class MappingParser:
 
     @staticmethod
     def _parse_mapping(properties):
+        logger = logging.getLogger(__name__)
         parsed_mapping = {}
         for field_name, field_info in properties.items():
-            if 'properties' in field_info:
-                parsed_mapping[field_name] = MappingParser._parse_mapping(field_info["properties"])
-            else:
-                field_type = MappingParser._get_field_type(field_info["type"])
+            logger.info("Field name: %s", field_name)
+            logger.info("Field info: %s", field_info)
 
+            if 'type' in field_info:
+                if field_info['type'] == 'nested':
+                    # Handle nested type
+                    parsed_mapping[field_name] = {
+                        "data_generator_type": "NESTED",
+                        "params": {
+                            "fields": MappingParser._parse_mapping(field_info.get("properties", {}))
+                        }
+                    }
+                elif field_info['type'] == 'object':
+                    # Handle nested type
+                    parsed_mapping[field_name] = {
+                        "data_generator_type": "OBJECT",
+                        "params": {
+                            "fields": MappingParser._parse_mapping(field_info.get("properties", {}))
+                        }
+                    }
+                else:
+                    # Handle regular fields
+                    field_type = MappingParser._get_field_type(field_info["type"])
+                    parsed_mapping[field_name] = {
+                        "data_generator_type": field_type,
+                        "params": {}
+                    }
+            elif 'properties' in field_info:
+                # Handle object type (non-nested)
                 parsed_mapping[field_name] = {
-                    "data_generator_type": field_type,
-                    "params": {}
+                    "data_generator_type": "OBJECT",
+                    "params": {
+                        "fields": MappingParser._parse_mapping(field_info["properties"])
+                    }
                 }
+            else:
+                logger.warning(f"Unrecognized field structure for {field_name}: {field_info}")
+
         return parsed_mapping
 
     @staticmethod
