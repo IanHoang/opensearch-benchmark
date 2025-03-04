@@ -39,9 +39,20 @@ class DateGenerator(BaseGenerator):
         end = datetime.fromisoformat(end_date) if end_date else datetime.now()
         return fake.date_between_dates(date_start=start, date_end=end).isoformat()
 
-# TEST THIS OUT
+
 class NestedGenerator(BaseGenerator):
     def generate(self, num_of_objs=random.randint(1,5), **kwargs):
+        """
+        Generates a nested array of JSON objects. This generator is used for Nested field types.
+        Nested fields are a special type of Object field and
+        the value for nested fields area always an array of JSON objects.
+        This is why it leverages the ObjectGenerator().
+
+        :param num_of_objs:
+        :param kwargs: usually contains 'field' which will be provided to ObjectGenerator()
+
+        :return: list of generated dictionaries (or JSON objects)
+        """
         obj_generator = ObjectGenerator()
         nested_objs = []
         for _ in range(num_of_objs):
@@ -52,6 +63,15 @@ class NestedGenerator(BaseGenerator):
 
 class ObjectGenerator(BaseGenerator):
     def generate(self, **kwargs):
+        """
+        Generates a dictionary of fields and generated values.
+        This is used for Nested and Object mapping field types.
+
+        :param kwargs: usually 'fields' will be in kwargs and is needed to cycle through all fields and use
+        their respective data generators to generate values
+
+        :return: dictionary, which will be a JSON object
+        """
         fields = kwargs.get('fields', {})
         generated_obj = {}
         for field, dg_tuple in fields.items():
