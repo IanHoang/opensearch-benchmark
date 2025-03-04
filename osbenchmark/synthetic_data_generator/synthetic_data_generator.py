@@ -66,11 +66,9 @@ class SyntheticDataGenerator:
         """
         logger = logging.getLogger(__name__)
         if isinstance(hydrated_blueprint, dict):
-            logger.info("Inside Generate Data Dict: %s", hydrated_blueprint)
             return {key: SyntheticDataGenerator.generate_data(value) for key, value in hydrated_blueprint.items()}
 
         elif isinstance(hydrated_blueprint, list):
-            logger.info("Inside Generate Data List: %s", hydrated_blueprint)
             return [SyntheticDataGenerator.generate_data(item) for item in hydrated_blueprint]
 
         elif isinstance(hydrated_blueprint, tuple):

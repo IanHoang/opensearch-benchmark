@@ -42,32 +42,20 @@ class DateGenerator(BaseGenerator):
 # TEST THIS OUT
 class NestedGenerator(BaseGenerator):
     def generate(self, num_of_objs=random.randint(1,5), **kwargs):
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info("num of objs %s", num_of_objs)
-
         obj_generator = ObjectGenerator()
         nested_objs = []
         for _ in range(num_of_objs):
-            logger.info("Nested Generator: Generating object %s", _)
-            logger.info("Nested Generator: kwargs %s", kwargs)
             generated_obj = obj_generator.generate(**kwargs)
             nested_objs.append(generated_obj)
-            logger.info("nested objs %s", nested_objs)
 
         return nested_objs
 
 class ObjectGenerator(BaseGenerator):
     def generate(self, **kwargs):
-        import logging
-        logger = logging.getLogger(__name__)
         fields = kwargs.get('fields', {})
-        logger.info("Object Generator: fields %s", fields)
         generated_obj = {}
-        logger.info("items %s", fields.items())
         for field, dg_tuple in fields.items():
             data_generator, params = dg_tuple
-            logger.info("Field %s, tuple %s", field, dg_tuple)
 
             generated_obj[field] = data_generator.generate(**params)
         return generated_obj
