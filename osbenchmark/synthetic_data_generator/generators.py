@@ -16,15 +16,14 @@ from faker import Faker
 
 fake = Faker()
 
+DATE_FORMATS = ['strict_year_month', 'strict_year_month_day']
+
 class BaseGenerator(ABC):
     @abstractmethod
     def generate(self, **kwargs):
         pass
 
-class KeywordGenerator(BaseGenerator):
-    def generate(self, **kwargs):
-        return fake.word()
-
+# Numeric Field Types
 class IntegerGenerator(BaseGenerator):
     def generate(self, min_value=0, max_value=100, **kwargs):
         return fake.random_int(min=min_value, max=max_value)
@@ -33,13 +32,120 @@ class FloatGenerator(BaseGenerator):
     def generate(self, min_value=0.0, max_value=100.0, **kwargs):
         return fake.pyfloat(min_value=min_value, max_value=max_value)
 
+# Boolean Field Types
+class BooleanGenerator(BaseGenerator):
+    def generate(self, **kwargs):
+        options = ["true", "false"]
+        return random.choice(options)
+
+# Date Field Types
 class DateGenerator(BaseGenerator):
     def generate(self, start_date=None, end_date=None, **kwargs):
-        start = datetime.fromisoformat(start_date) if start_date else datetime(2000, 1, 1)
-        end = datetime.fromisoformat(end_date) if end_date else datetime.now()
-        return fake.date_between_dates(date_start=start, date_end=end).isoformat()
+        format = kwargs.get('format', False)
+        # TODO Support more formats later. Parser should extract format and add to params.
+        # Need a dictionary to handle all
+        # of these https://opensearch.org/docs/latest/field-types/supported-field-types/date/
+        if format:
+            # Check if multiple options and see if valid
+            formats = format.split("||")
+            for format in formats:
+                if format not in DATE_FORMATS:
+                    raise ValueError(f"Format {format} does not exist in available {DATE_FORMATS}")
 
+            format_to_generate_with = random.choice(formats)
 
+        else:
+            # default way to generate dates
+            start = datetime.fromisoformat(start_date) if start_date else datetime(2000, 1, 1)
+            end = datetime.fromisoformat(end_date) if end_date else datetime.now()
+            return fake.date_between_dates(date_start=start, date_end=end).isoformat()
+
+# IP Address Field Types
+class IPAddressGenerator(BaseGenerator):
+    def generate(self, **kwargs):
+        format = kwargs.get('format', None)
+        if format and format.lower() == 'ipv6':
+            return fake.ipv6()
+        else:
+            return fake.ipv4()
+
+# Range Field Types
+class IntegerRangeGenerator(BaseGenerator):
+    def generate(self, **kwargs):
+        greater_than_equal_to_number = fake.random_int()
+        less_than_equal_to_number = fake.random_int(max=greater_than_equal_to_number)
+
+        return {
+            'gte': greater_than_equal_to_number,
+            'lte': less_than_equal_to_number
+        }
+
+class DoubleRangeGenerator(BaseGenerator):
+    def generate(self, **kwargs):
+        greater_than_equal_to_number = fake.random_double()
+        less_than_equal_to_number = fake.random_double(max=greater_than_equal_to_number)
+
+        return {
+            'gte': greater_than_equal_to_number,
+            'lte': less_than_equal_to_number
+        }
+
+class FloatRangeGenerator(BaseGenerator):
+    def generate(self, **kwargs):
+        min_value = kwargs.get('min_value', 0)
+        max_value = kwargs.get('max_value', 1000)
+        greater_than_equal_to_float = fake.pyfloat(min_value=min_value, max_value=max_value, right_digits=2)
+        less_than_equal_to_float = fake.pyfloat(min_value, max_value=greater_than_equal_to_float, right_digits=2)
+
+        return {
+            'gte': greater_than_equal_to_float,
+            'lte': less_than_equal_to_float
+        }
+
+class IPRangeGenerator(BaseGenerator):
+    def generate(self, **kwargs):
+        ip_address_generator = IPAddressGenerator()
+
+        if kwargs.get('use_cidr', False):
+            return ip_address_generator.generate(**kwargs) + '/24'
+
+        def get_smaller_ip_address(ip_address):
+            int_ip_address = int(ipaddress.ip_address(ip_address))
+            smaller_int_ip_address = max(0, int_ip_address - random.randint(1, 1000))
+            return str(ipaddress.ip_address(smaller_int_ip_address))
+
+        greater_than_or_equal_to_ip_address = ip_address_generator.generate(**kwargs)
+        less_than_or_equal_to_ip_address = get_smaller_ip_address(greater_than_or_equal_to_ip_address)
+
+        return {
+            'gte': greater_than_or_equal_to_ip_address,
+            'lte': less_than_or_equal_to_ip_address
+        }
+
+class DateRangeGenerator(BaseGenerator):
+    # TODO: TEST THIS
+    def generate(self, **kwargs):
+        date_generator = DateGenerator()
+
+        format = kwargs.get('format', False)
+
+        # Check if multiple options and see if valid
+        formats = format.split("||")
+        for format in formats:
+            if format not in DATE_FORMATS:
+                raise ValueError(f"Format {format} does not exist in available {DATE_FORMATS}")
+
+        format_to_generate_with = random.choice(formats)
+
+        gte_date = date_generator.generate(**kwargs)
+        lte_date = date_generator.generate(end_date=gte_date)
+
+        return {
+            'gte': gte_date,
+            'lte': lte_date
+        }
+
+# Complex / Object Field Types
 class NestedGenerator(BaseGenerator):
     def generate(self, num_of_objs=random.randint(1,5), **kwargs):
         """
@@ -82,13 +188,15 @@ class ObjectGenerator(BaseGenerator):
             generated_obj[field] = data_generator.generate(**params)
         return generated_obj
 
+# String Field Types
+class KeywordGenerator(BaseGenerator):
+    def generate(self, **kwargs):
+        return fake.word()
+
+# Other Use-Cases
 class TimestampGenerator(BaseGenerator):
     def generate(self, **kwargs):
         return fake.iso8601()
-
-class IPAddressGenerator(BaseGenerator):
-    def generate(self, **kwargs):
-        return fake.ipv4()
 
 class StatusCodeGenerator(BaseGenerator):
     def generate(self, **kwargs):

@@ -9,7 +9,6 @@
 import argparse
 from dataclasses import dataclass, field
 from typing import List, Optional
-import yaml
 
 from osbenchmark.utils import io, opts, console
 from osbenchmark.synthetic_data_generator.generators import *
