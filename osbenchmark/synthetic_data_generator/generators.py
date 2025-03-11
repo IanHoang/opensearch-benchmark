@@ -206,3 +206,11 @@ class CurrencyGenerator(BaseGenerator):
     def generate(self, min_value=0, max_value=1000, currency="USD", **kwargs):
         amount = fake.pyfloat(min_value=min_value, max_value=max_value, right_digits=2)
         return f"{amount:.2f} {currency}"
+
+class RandomChoice(BaseGenerator):
+    def generate(self, **kwargs):
+        elements = kwargs.get('elements', None)
+        if elements:
+            return fake.random_element(elements=elements)
+        else:
+            raise ValueError('No elements provided for Random Choice Generator')

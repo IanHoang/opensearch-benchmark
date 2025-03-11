@@ -11,9 +11,14 @@ import logging
 import multiprocessing
 import time
 from typing import Dict, Any, List
+import os
+import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import dask
-from dask.distributed import Client
+from dask import delayed
+import dask.bag as db
+from dask.distributed import Client, Lock, wait
 
 from osbenchmark.utils import console
 from osbenchmark.synthetic_data_generator.types import GeneratorTypes
@@ -21,131 +26,144 @@ from osbenchmark.synthetic_data_generator.input_processor import create_sdg_conf
 
 class SyntheticDataGenerator:
     @staticmethod
-    def hydrate_blueprint_with_lazy_evaluation(blueprint: Dict[str, Any]) -> Dict[str, Any]:
+    def compile_blueprint(blueprint: Dict[str, Any]) -> str:
         """
-        A raw blueprint was created via the input files that user provided (index mappings, template document).
-        This method converts that raw blueprint into a template that can be used to generate synthetic data.
-
-        :param blueprint: raw blueprint that needs to be hydrated. Hydration refers to replacing instances
-          of {'generator': 'DataGeneratorType', 'params': {}} with specific DataGenerators.
-
-        :return: a dictionary with values containing tuples with a DataGenerator and params user provided
+        Recursively traverse mappings or template and compile a blueprint
         """
-        if isinstance(blueprint, dict):
-            if SyntheticDataGenerator._is_value_a_data_generator(blueprint):
-                data_generator = GeneratorTypes[blueprint["data_generator_type"].upper()]
-                data_generator_params = blueprint["params"]
+        lines = []
+        for key, value in blueprint.items():
+            if isinstance(value, dict) and 'data_generator_type' in value:
+                generator = f"GeneratorTypes.{value['data_generator_type'].upper()}.value.generate"
+                params = ', '.join(f"{k}={v}" for k, v in value.get('params', {}).items())
+                lines.append(f"'{key}': {generator}({params})")
+            elif isinstance(value, dict):
+                nested_dict = SyntheticDataGenerator.compile_blueprint(value)
+                lines.append(f"'{key}': {nested_dict}")
+            elif isinstance(value, list):
+                nested_list = [SyntheticDataGenerator.compile_blueprint(item) if isinstance(item, dict) else repr(item) for item in value]
+                lines.append(f"'{key}': [{', '.join(nested_list)}]")
+            else:
+                lines.append(f"'{key}': {repr(value)}")
 
-                # Recursively hydrate fields in nested or object mapping fields
-                if blueprint["data_generator_type"].upper() in ["NESTED", "OBJECT"]:
-                    data_generator_params["fields"] = SyntheticDataGenerator.hydrate_blueprint_with_lazy_evaluation(data_generator_params.get("fields", {}))
-
-                # Insert tuple with DataGenerator and its params
-                return (data_generator, data_generator_params)
-
-            if SyntheticDataGenerator._is_value_static(blueprint):
-                return blueprint["value"]
-
-            return {key: SyntheticDataGenerator.hydrate_blueprint_with_lazy_evaluation(value) for key, value in blueprint.items()}
-
-        elif isinstance(blueprint, list):
-            return [SyntheticDataGenerator.hydrate_blueprint_with_lazy_evaluation(item) for item in blueprint]
-
-        else:
-            return blueprint
+        return f"{{{', '.join(lines)}}}"
 
     @staticmethod
-    def generate_data(hydrated_blueprint: Dict[str, Any]) -> Dict[str, Any]:
+    def create_sdg_function(blueprint: Dict[str, Any]) -> callable:
         """
-        Recursively traverses through hydrated blueprint.
-        If encounters a DataGenerator, will invoke it to generate data.
-
-        :param hydrated_blueprint: hydrated blueprint produced by hydrate_blueprint_with_lazy_evaluation() method
-
-        :return: a dictionary representing a document with synthetic generated data
+        Create a callable function containing all the Data Generators.
+        The created function can be called and will generate the random values.
         """
-        logger = logging.getLogger(__name__)
-        if isinstance(hydrated_blueprint, dict):
-            return {key: SyntheticDataGenerator.generate_data(value) for key, value in hydrated_blueprint.items()}
+        compiled_blueprint = SyntheticDataGenerator.compile_blueprint(blueprint)
+        func_def = f"def generate_document():\n    return {compiled_blueprint}"
 
-        elif isinstance(hydrated_blueprint, list):
-            return [SyntheticDataGenerator.generate_data(item) for item in hydrated_blueprint]
-
-        elif isinstance(hydrated_blueprint, tuple):
-            # Generate data with discovered Data Generator Type
-            data_generator_type = hydrated_blueprint[0]
-
-            if isinstance(data_generator_type, GeneratorTypes):
-                if data_generator_type in [GeneratorTypes.NESTED, GeneratorTypes.OBJECT]:
-                    # For nested and object mapping field types, the second entry in the tuple is the fields for the object. Provide them to the NestedGenerator and ObjectGenerator.
-                    object_fields = hydrated_blueprint[1]['fields']
-
-                    return data_generator_type.generate(fields=object_fields)
-                else:
-                    # All other generator types, the second entry in the tuple is just the params. Provide these two all other GeneratorTypes
-                    params = hydrated_blueprint[1]
-                    return data_generator_type.generate(**params)
-        else:
-            # just return the value as is
-            return hydrated_blueprint
+        namespace = {}
+        exec(func_def, globals(), namespace)
+        return namespace['generate_document']
 
     @staticmethod
-    def generate_data_chunk(chunk_size: int, hydrated_blueprint: Any) -> List[Any]:
-        """
-        Generates a chunk of data using the hydrated blueprint
+    def generate_data(generate_document: callable, chunk_size: int) -> List[Dict[str, Any]]:
+        return [generate_document() for _ in range(chunk_size)]
 
-        :param chunk_size: number of docs in a chunk to generate. By default, is 1000. Should adjust based on RAM size
-        :param hydrated_blueprint: hydrated blueprint produced by hydrate_blueprint_with_lazy_evaluation() method
+def generate_one_document_and_get_size(sdg_function: callable):
+    output = [sdg_function()]
+    write_chunk(output, '/tmp/test-size.json')
 
-        :return: a list of dictionaries. This list represents a chunk ofsynthetically generated documents.
-        """
-        return [SyntheticDataGenerator.generate_data(hydrated_blueprint) for _ in range(chunk_size)]
+    size = os.path.getsize('/tmp/test-size.json')
+    os.remove('/tmp/test-size.json')
+    console.println(f"Size of one document: {size}")
+    return size
 
-    @staticmethod
-    def _is_value_a_data_generator(blueprint):
-        return True if "data_generator_type" in blueprint and "params" in blueprint else False
+def generate_compiled_data_chunk(generate_document: callable, chunk_size: int) -> List[Dict[str, Any]]:
+        return SyntheticDataGenerator.generate_data(generate_document, chunk_size)
 
-    @staticmethod
-    def _is_value_static(blueprint):
-        return True if "type" in blueprint and blueprint["type"] == "STATIC" else False
+def generate_dataset_with_compilation(total_size_gb: float, output_dir: str, blueprint: Dict[str, Any], workers: int):
+    logger = logging.getLogger(__name__)
+    start_time = time.time()
 
-def user_confirmed_accurate_setup(sdg_config):
-    console.println("Synthetic Data Generation Config: ", sdg_config.index_name)
-    console.println("Generation Blue Print: ", json.dumps(sdg_config.blueprint, indent=2))
+    chunk_size = 10000  # Increased chunk size for better performance
+    total_size_bytes = total_size_gb * 1024 * 1024 * 1024
+    current_size = 0
+    file_counter = 0
 
-    user_confirmed = input(f"Synthetic Data Generation Blueprints for {[sdg_config.index_name]}. Continue? [y/n]: ")
-    valid_responses = ['y', 'n']
-    while user_confirmed not in valid_responses:
-        user_confirmed = input(f"Synthetic Data Generation Blueprints for {[sdg_config.index_name]}. Continue? [y/n]: ")
+    # Compile the blueprint once
+    generate_document = SyntheticDataGenerator.create_sdg_function(blueprint)
 
-    return True if user_confirmed == 'y' else False
+    approximate_doc_size = generate_one_document_and_get_size(generate_document)
+
+    client = Client(n_workers=8, threads_per_worker=1)
+
+    # TESTING HERE
+    # output = [generate_document()]
+    # write_chunk(output, '/home/ec2-user/test-size.json')
+
+    # size = os.path.getsize('/home/ec2-user/test-size.json')
+    # console.println(f"size: {size}")
+    # output = generate_compiled_data_chunk(generate_document=generate_document, chunk_size=10000)
+    # console.println(len(output))
+    # len_of_written_data = write_chunk(output, '/home/ec2-user/sdg-output.json')
+    # print(f"Number of docs written: {len_of_written_data}")
+    # print(f"Estimated size in bytes: {len_of_written_data * 1000}")
+    # size = os.path.getsize('/home/ec2-user/sdg-output.json')
+    # print(f"Size according to OS library: {size}")
+
+
+    while current_size < total_size_bytes:
+        file_path = os.path.join(output_dir, f"data_{file_counter}.json")
+        file_size = 0
+
+        while file_size < 40 * 1024 * 1024 * 1024 and current_size < total_size_bytes:
+            # Submit
+            futures = [client.submit(generate_compiled_data_chunk, generate_document, chunk_size) for _ in range(8)]
+            results = client.gather(futures)
+
+            # Write data
+            for data in results:
+                written = write_chunk(data, file_path)
+                current_size += written * approximate_doc_size
+
+            logger.info(f"Current Size {current_size} Bytes and {current_size / (1024 * 1024 * 1024):.2f} GB. Requested for {total_size_gb} GB")
+
+            if current_size >= total_size_bytes:
+                break
+
+        file_counter += 1
+
+
+    client.close()
+    end_time = time.time()
+    logger.info(f"Generated {current_size / (1024 * 1024 * 1024):.2f} GB dataset in {end_time - start_time:.2f} seconds")
+
+def write_chunk(data, file_path):
+    with open(file_path, 'a') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
+    return len(data)
 
 def get_cores_in_lg_host():
-    return multiprocessing.cpu_count()
+    return os.cpu_count()
 
 def orchestrate_data_generation(cfg):
     logger = logging.getLogger(__name__)
     sdg_config = create_sdg_config_from_args(cfg)
 
-    if user_confirmed_accurate_setup(sdg_config):
-        user_hydrated_blueprint = SyntheticDataGenerator.hydrate_blueprint_with_lazy_evaluation(sdg_config.blueprint)
-        print(user_hydrated_blueprint)
-        # print(json.dumps(user_hydrated_blueprint, indent=2, default=str))
+    blueprint = sdg_config.blueprint
+    logger.info("Blueprint: %s", json.dumps(blueprint, indent=2))
 
-        chunk_size = 1000
-        total_size = sdg_config.total_size_gb * 1024 * 1024 * 1024
-        current_size = 0
-        file_counter = 0
-        workers = get_cores_in_lg_host()
-        dask_client = Client(n_workers=12, threads_per_worker=1)
+    total_size_gb = sdg_config.total_size_gb
+    output_dir = sdg_config.output_path
+    workers = get_cores_in_lg_host()
 
-        logger.info("Generating!")
+    generate_dataset_with_compilation(total_size_gb, output_dir, blueprint, workers)
 
-        results = SyntheticDataGenerator.generate_data_chunk(2, user_hydrated_blueprint)
 
-        for result in results:
-            print(json.dumps(result, indent=2))
+# def user_confirmed_accurate_setup(sdg_config):
+#     logger = logging.getLogger(__name__)
+#     logger.info("Synthetic Data Generation Config: %s", sdg_config.index_name)
+#     logger.info("Generation Blue Print: %s", json.dumps(sdg_config.blueprint, indent=2))
 
-    else:
-        console.println("User has cancelled synthetic data generation.")
+#     user_confirmed = input(f"Synthetic Data Generation Blueprints for {[sdg_config.index_name]}. Continue? [y/n]: ")
+#     valid_responses = ['y', 'n']
+#     while user_confirmed not in valid_responses:
+#         user_confirmed = input(f"Synthetic Data Generation Blueprints for {[sdg_config.index_name]}. Continue? [y/n]: ")
 
+#     return user_confirmed == 'y'

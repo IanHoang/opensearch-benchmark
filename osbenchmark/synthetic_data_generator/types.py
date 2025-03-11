@@ -35,6 +35,7 @@ TYPE_MAPPING = {
     'object': 'OBJECT',
     'binary': 'BINARY',
     'ip': 'IP_ADDRESS',
+    'random_choice': 'RANDOM_CHOICE'
 }
 
 class Modes(Enum):
@@ -54,6 +55,7 @@ class GeneratorTypes(Enum):
     # Other use-cases
     STATUS_CODE = StatusCodeGenerator()
     CURRENCY = CurrencyGenerator()
+    RANDOM_CHOICE = RandomChoice()
 
     def generate(self, **kwargs):
         return self.value.generate(**kwargs)
