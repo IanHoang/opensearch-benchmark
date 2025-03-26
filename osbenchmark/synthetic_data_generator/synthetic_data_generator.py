@@ -187,7 +187,11 @@ def orchestrate_data_generation(cfg):
     print(custom_module)
     print(custom_config)
 
-    # Create Dask Dashboard
+
+
+    #TODO: Create Dask Dashboard
+    #TODO: Add way to chane chunk size and worker count
+
     if use_manual_method(sdg_config):
         my_seed = 1
         generate_fake_document = custom_module.generate_fake_document
@@ -203,5 +207,6 @@ def orchestrate_data_generation(cfg):
         document = generate_fake_document(providers=providers, **custom_lists)
         print(json.dumps(document, indent=2))
 
+        print("Starting generation")
         # Generate all documents
-        # generate_dataset_with_user_module(dask_client, total_size_gb, output_dir, custom_module, custom_config)
+        generate_dataset_with_user_module(dask_client, total_size_gb, output_dir, custom_module, custom_config)
