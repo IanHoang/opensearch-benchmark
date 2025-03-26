@@ -38,6 +38,7 @@ from osbenchmark import version, actor, config, paths, \
     test_execution_orchestrator, results_publisher, \
         metrics, workload, exceptions, log
 from osbenchmark.builder import provision_config, builder
+from osbenchmark.synthetic_data_generator import synthetic_data_generator
 from osbenchmark.workload_generator import workload_generator
 from osbenchmark.utils import io, convert, process, console, net, opts, versions
 from osbenchmark import aggregator
@@ -156,6 +157,47 @@ def create_arg_parser():
     info_task_filter_group.add_argument(
         "--exclude-tasks",
         help="Defines a comma-separated list of tasks not to run. By default all tasks of a test_procedure are run.")
+
+    synthetic_data_generator_parser = subparsers.add_parser("generate-data",
+                                                            help="Generate synthetic data based on existing index mappings, template document, or both." )
+
+    exclusive_file_inputs = synthetic_data_generator_parser.add_mutually_exclusive_group(required=True)
+    exclusive_file_inputs.add_argument(
+        "--index-mappings",
+        "-i",
+        help="Index mappings to generate data from or validate return types."
+    )
+    exclusive_file_inputs.add_argument(
+        "--custom-module",
+        "-m",
+        help="Manual module containing generate_fake_document() definition and can contain classes of custom data providers. This is for users who want granular control over their data generation"
+    )
+
+    exclusive_params = synthetic_data_generator_parser.add_mutually_exclusive_group(required=True)
+    exclusive_params.add_argument(
+        "--total-size",
+        "-s",
+        type=int,
+        help="Total size in GB of synthetically generated data corpora"
+    )
+    synthetic_data_generator_parser.add_argument(
+        "--index-name",
+        "-n",
+        required=True,
+        help="Index name associated with generated corpora"
+    )
+    synthetic_data_generator_parser.add_argument(
+        "--output-path",
+        "-p",
+        default=os.path.join(os.getcwd(), "generated_corpora"),
+        help="Output path for data corpora. Data corpora will be written in a directory."
+    )
+    synthetic_data_generator_parser.add_argument(
+        "--custom-config",
+        "-c",
+        default=None,
+        help="This should be used for when providing custom module"
+    )
 
     create_workload_parser = subparsers.add_parser("create-workload", help="Create a OSB workload from existing data")
     create_workload_parser.add_argument(
@@ -673,7 +715,7 @@ def create_arg_parser():
         default=False)
 
     for p in [list_parser, test_execution_parser, compare_parser, aggregate_parser,
-              download_parser, install_parser, start_parser, stop_parser, info_parser, create_workload_parser]:
+              download_parser, install_parser, start_parser, stop_parser, info_parser, synthetic_data_generator_parser, create_workload_parser]:
         # This option is needed to support a separate configuration for the integration tests on the same machine
         p.add_argument(
             "--configuration-name",
@@ -1043,6 +1085,16 @@ def dispatch_sub_command(arg_parser, args, cfg):
                 execute_test(cfg, args.kill_running_processes)
             else:
                 console.info("Please enter a valid number of test iterations")
+        elif sub_command == "generate-data":
+                cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "index_name", args.index_name)
+                cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "index_mappings", args.index_mappings)
+                cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "custom_module", args.custom_module)
+                cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "custom_config", args.custom_config)
+                cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "output_path", args.output_path)
+                cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "total_size", args.total_size)
+
+                synthetic_data_generator.orchestrate_data_generation(cfg)
+
         elif sub_command == "create-workload":
             cfg.add(config.Scope.applicationOverride, "generator", "indices", args.indices)
             cfg.add(config.Scope.applicationOverride, "generator", "number_of_docs", args.number_of_docs)
