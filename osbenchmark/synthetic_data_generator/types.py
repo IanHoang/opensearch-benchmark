@@ -13,8 +13,8 @@ from typing import List, Optional
 from osbenchmark.utils import io, opts, console
 from enum import Enum
 
-DEFAULT_MAX_CHUNK_SIZE=40_000_000_000
-DEFAULT_BATCH_SIZE=1000
+DEFAULT_MAX_FILE_SIZE_GB=40
+DEFAULT_CHUNK_SIZE=10000
 
 @dataclass
 class SyntheticDataGeneratorConfig:

@@ -18,9 +18,11 @@ from mimesis.random import Random
 from mimesis import Cryptographic
 from mimesis.providers.base import BaseProvider
 from mimesis.random import Random
+from tqdm import tqdm
 
 from osbenchmark.utils import console
-from osbenchmark.synthetic_data_generator.input_processor import create_sdg_config_from_args, use_manual_method
+from osbenchmark.synthetic_data_generator.input_processor import create_sdg_config_from_args, use_custom_module
+from osbenchmark.synthetic_data_generator.types import DEFAULT_MAX_FILE_SIZE_GB, DEFAULT_CHUNK_SIZE
 
 def load_user_module(file_path):
     spec = importlib.util.spec_from_file_location("user_module", file_path)
@@ -116,19 +118,19 @@ def generate_data_chunk(user_defined_function: callable, chunk_size: int, custom
 
     return [user_defined_function(providers=providers, **custom_lists) for _ in range(chunk_size)]
 
-
 # This is most ideal since we do not need to put pure=False and also we use actual seeds
 def generate_dataset_with_user_module(client, sdg_config, user_module, user_config):
     logger = logging.getLogger(__name__)
-    # Fetch custom lists and providers user provided via Config.yml and the generate_fake_document() function
+
     custom_lists = user_config.get('custom_lists', {})
     custom_providers = {name: getattr(user_module, name) for name in user_config.get('custom_providers', [])}
-    generate_fake_document = user_module.generate_fake_document
-
-    start_time = time.time()
-    chunk_size = 10000  # Adjust this based on your memory constraints
-    avg_document_size = get_avg_document_size(generate_fake_document, custom_providers, custom_lists)
+    max_file_size_bytes = user_config.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB) * 1024 * 1024 * 1024
     total_size_bytes = sdg_config.total_size_gb * 1024 * 1024 * 1024
+    chunk_size = user_config.get('chunk_size', DEFAULT_CHUNK_SIZE)  # Adjust this based on your memory constraints
+
+    generate_fake_document = user_module.generate_fake_document
+    avg_document_size = get_avg_document_size(generate_fake_document, custom_providers, custom_lists)
+
     current_size = 0
     docs_written = 0
     file_counter = 0
@@ -138,70 +140,70 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
     logger.info("Total GB to generate: %s", sdg_config.total_size_gb)
 
     # from dask.distributed import performance_report
-    # Start Generating Data
-    while current_size < total_size_bytes:
-        file_path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_{file_counter}.json")
-        file_size = 0
+    start_time = time.time()
+    with tqdm(total=total_size_bytes) as progress_bar:
+        while current_size < total_size_bytes:
+            file_path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_{file_counter}.json")
+            file_size = 0
 
-        while file_size < 40 * 1024 * 1024 * 1024:  # 40GB
-            generation_start_time = time.time()
-            seeds = generate_seeds_for_workers(regenerate=True)
-            logger.info("Using seeds: %s", seeds)
+            while file_size < max_file_size_bytes:  # 40GB make this configurable in the benchmark.ini or generation.ini or config.yml
+                generation_start_time = time.time()
+                seeds = generate_seeds_for_workers(regenerate=True)
+                logger.info("Using seeds: %s", seeds)
 
-            # Test if 40GB works by removing seed and just doing for _ in range(workers)
-            # with performance_report(filename="financial_mimesis_10GB.html"):
-            futures = [client.submit(generate_data_chunk, generate_fake_document, chunk_size, custom_lists, custom_providers, seed) for seed in seeds]
-            results = client.gather(futures) # if using AS_COMPLETED remove this line
+                # Test if 40GB works by removing seed and just doing for _ in range(workers)
+                # with performance_report(filename="financial_mimesis_10GB.html"):
+                futures = [client.submit(generate_data_chunk, generate_fake_document, chunk_size, custom_lists, custom_providers, seed) for seed in seeds]
+                results = client.gather(futures) # if using AS_COMPLETED remove this line
 
-            writing_start_time = time.time()
-            for data in results:
-                written = write_chunk(data, file_path)
-                docs_written += written
-                current_size += written * avg_document_size
+                writing_start_time = time.time()
+                for data in results:
+                    written = write_chunk(data, file_path)
+                    docs_written += written
+                    written_size = written * avg_document_size
+                    current_size += written_size
+                    progress_bar.update(written_size)
 
-            file_size = os.path.getsize(file_path)
-            writing_end_time = time.time()
-            generating_took_time = writing_start_time - generation_start_time
-            writing_took_time = writing_end_time - writing_start_time
-            logger.info("Generating took [%s] seconds", generating_took_time)
-            logger.info("Writing took [%s] seconds", writing_took_time)
+                file_size = os.path.getsize(file_path)
+                writing_end_time = time.time()
+                generating_took_time = writing_start_time - generation_start_time
+                writing_took_time = writing_end_time - writing_start_time
+                logger.info("Generating took [%s] seconds", generating_took_time)
+                logger.info("Writing took [%s] seconds", writing_took_time)
+                if current_size >= total_size_bytes:
+                    break
 
-            if current_size >= total_size_bytes:
-                break
+            file_counter += 1
 
-        file_counter += 1
-
-    end_time = time.time()
-    total_time_to_generate_data = end_time - start_time
-    logger.info("Generated %s docs and %s GB dataset in % seconds", docs_written, file_size, total_time_to_generate_data)
-    print(f"Generated {docs_written} docs and {file_size}GB dataset in {end_time - start_time:.2f} seconds")
-
+        end_time = time.time()
+        total_time_to_generate_data = end_time - start_time
+        progress_bar.update(total_size_bytes - progress_bar.n)
+        logger.info("Generated %s docs and %s GB dataset in %s seconds", docs_written, file_size, total_time_to_generate_data)
+        console.println(f"Generated {docs_written} docs and {file_size}GB dataset in {end_time - start_time:.2f} seconds")
 
 def orchestrate_data_generation(cfg):
     logger = logging.getLogger(__name__)
     sdg_config = create_sdg_config_from_args(cfg)
-
-    blueprint = sdg_config.blueprint
-    logger.info("Blueprint: %s", json.dumps(blueprint, indent=2))
-
-    total_size_gb = sdg_config.total_size_gb
-    output_dir = sdg_config.output_path
-    workers = os.cpu_count()
-    print(workers)
-    dask_client = Client(n_workers=workers, threads_per_worker=1)  # We keep it to 1 thread because generating random data is CPU intensive
-    # Detect if using automated index mapping mode or manual module + config
-
-    # Load in module user provided and config.yml
     custom_module = load_user_module(sdg_config.custom_module_path)
     custom_config = load_config(sdg_config.custom_config_path)
+
+    workers = custom_config.get("workers", os.cpu_count())
+    dask_client = Client(n_workers=workers, threads_per_worker=1)  # We keep it to 1 thread because generating random data is CPU intensive
+    logger.info("Number of workers to use: %s", workers)
+    blueprint = sdg_config.blueprint
+    logger.info("Blueprint: %s", json.dumps(blueprint, indent=2))
     print(sdg_config)
     print(custom_module)
     print(custom_config)
 
     #TODO: Create Dask Dashboard
-    #TODO: Add way to chane chunk size and worker count
+    console.println(f"Dashboard link to monitor processes and task streams: {dask_client.dashboard_link}")
+    console.println("For users who are running generation on a virtual machine, consider tunneling to localhost to view dashboard.")
 
-    if use_manual_method(sdg_config):
+    #TODO: Add way to modify default chunk size and worker count
+    # should it be benchmark.ini file or generation.ini file or config.yml
+
+    if use_custom_module(sdg_config):
         # my_seed = 1
         # generate_fake_document = custom_module.generate_fake_document
         # custom_lists = custom_config.get('custom_lists', {})
@@ -219,3 +221,9 @@ def orchestrate_data_generation(cfg):
         print("Starting generation")
         # Generate all documents
         generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
+    else:
+        # Automated method
+        pass
+
+    logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
+    console.println(f"Visit the following path to view synthetically generated data: {sdg_config.output_path}")

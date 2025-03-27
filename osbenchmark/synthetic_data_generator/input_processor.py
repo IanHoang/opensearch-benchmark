@@ -40,9 +40,9 @@ def create_sdg_config_from_args(cfg) -> SyntheticDataGeneratorConfig:
     except ConfigError as e:
         raise ConfigError("Config error when building SyntheticDataGeneratorConfig: ", e)
 
-def use_manual_method(sdg_config: SyntheticDataGeneratorConfig) -> bool:
+def use_custom_module(sdg_config: SyntheticDataGeneratorConfig) -> bool:
     if sdg_config.custom_module_path and not sdg_config.index_mappings_path:
-        logger.info("User is using manual mode because a module path was provided: [%s]", sdg_config.custom_module_path)
+        logger.info("User is using custom module to generate synthetic data. Custom module is found in this path: [%s]", sdg_config.custom_module_path)
         return True
 
     return False

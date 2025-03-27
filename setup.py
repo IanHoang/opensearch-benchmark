@@ -107,6 +107,7 @@ install_requires = [
     # License: BSD
     # Required for knnvector workload
     "numpy>=1.24.2,<=1.26.4",
+    "tqdm",
     "faker",
     "mimesis==11.1.0",
     "dask",
