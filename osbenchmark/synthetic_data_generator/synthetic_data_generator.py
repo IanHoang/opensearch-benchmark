@@ -37,6 +37,12 @@ def load_config(config_path):
     else:
         return {}
 
+def write_chunk(data, file_path):
+    with open(file_path, 'a') as f:
+        for item in data:
+            f.write(json.dumps(item) + '\n')
+    return len(data)
+
 # We just need to ensure that reseeding is after custom data providers are added. But we also have ot ensure that custom providers have reseed abilities
 def instantiate_all_providers(custom_providers):
     g = Generic(locale=Locale.DEFAULT)
@@ -70,12 +76,6 @@ def add_custom_providers(generic, custom_providers):
             # If it's not a Mimesis provider, we'll add it as is
             setattr(generic, name, provider_class())
     return generic
-
-def write_chunk(data, file_path):
-    with open(file_path, 'a') as f:
-        for item in data:
-            f.write(json.dumps(item) + '\n')
-    return len(data)
 
 def generate_seeds_for_workers(regenerate=False):
     client = get_client()
@@ -199,6 +199,7 @@ def orchestrate_data_generation(cfg):
     #TODO: Create Dask Dashboard
     console.println(f"Dashboard link to monitor processes and task streams: {dask_client.dashboard_link}")
     console.println("For users who are running generation on a virtual machine, consider tunneling to localhost to view dashboard.")
+    console.println("")
 
     #TODO: Add way to modify default chunk size and worker count
     # should it be benchmark.ini file or generation.ini file or config.yml
@@ -226,4 +227,5 @@ def orchestrate_data_generation(cfg):
         pass
 
     logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
+    console.println("")
     console.println(f"Visit the following path to view synthetically generated data: {sdg_config.output_path}")
