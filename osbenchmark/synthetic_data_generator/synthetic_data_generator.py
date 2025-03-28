@@ -112,14 +112,42 @@ def get_avg_document_size(generate_fake_document: callable, custom_providers: di
 
 # In the real Program, this should not change. This is a worker. But should this be split to where the instantiation of objects are separate from generating large chunks?
 def generate_data_chunk(user_defined_function: callable, chunk_size: int, custom_lists, custom_providers, seed=None):
-    # Instantiates, adds, and seeds providers them
+    """
+    Synthetic Data Generator Worker that calls a function that generates a single document.
+    The worker will call the function N number of times to generate N docs of data before returning results
+
+    :param user_defined_function: This is the callable that the user defined in their module.
+        The callable should be named 'generate_fake_document()'
+    :param chunk_size: The number of documents the worker needs to generate before returning them in a list
+    :param custom_lists (optional): These are custom lists that the user_defined_function uses to generate random values
+    :param custom_providers (optional): These are custom providers (written in Mimesis or Faker) that generate data in a specific way.
+        Users define this in the same file as generate_fake_document() function
+
+    :returns List of documents to be written to disk
+    """
     providers = instantiate_all_providers(custom_providers)
     providers = seed_providers(providers, seed)
 
     return [user_defined_function(providers=providers, **custom_lists) for _ in range(chunk_size)]
 
-# This is most ideal since we do not need to put pure=False and also we use actual seeds
+
 def generate_dataset_with_user_module(client, sdg_config, user_module, user_config):
+    """
+    This is used whenever a user has provided their own custom module to generate fake data with.
+    This module must contain a function called generate_fake_document(), which houses the definitions of a single synthetic document. It can also
+    contain a custom data generators or data providers. It's recommended that custom data generators or data providers are written in Mimesis but they
+    can also be written in Faker or use other Python libraries. For best performance, libraries other than Mimesis or Faker should be highly-performant libraries.
+    For example, if we want to have a custom data provider that generates a list of random values, we should leverage random library as it bypasses python's GIL.
+    For some business use-cases, it might be hard to find highly-performant libraries so writing any code to generate logic is fine but understand that there might be performance limitations
+
+    param: client: Dask client that performs multiprocessing and creates dashboard to visualize task streams
+    param: sdg_config: SyntheticDataGenerationConfig instance that houses information related to data corpora to generate
+    param: user_module: Python module that user supplies containing logic to generate synthetic documents
+    param: user_config: Optional config that specifies custom lists and custom data providers that the custom module uses to generate data.
+        This also contains configuration details related to how data is generated (i.e. number of workers to use, max file size in GB, and number of documents in a chunk)
+
+    returns: Does not return results but writes documents to output path
+    """
     logger = logging.getLogger(__name__)
 
     custom_lists = user_config.get('custom_lists', {})
