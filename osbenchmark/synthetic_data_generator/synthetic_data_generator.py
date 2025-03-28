@@ -43,40 +43,6 @@ def write_chunk(data, file_path):
             f.write(json.dumps(item) + '\n')
     return len(data)
 
-# We just need to ensure that reseeding is after custom data providers are added. But we also have ot ensure that custom providers have reseed abilities
-def instantiate_all_providers(custom_providers):
-    g = Generic(locale=Locale.DEFAULT)
-    r = Random()
-
-    if custom_providers:
-        # Updates generic provider to have custom providers. These providers must extend BaseProvider in Mimesis
-        g = add_custom_providers(g, custom_providers)
-
-    provider_instances = {
-        'generic': g,
-        'random': r
-    }
-
-    return provider_instances
-
-def seed_providers(providers, seed=None):
-    for key, provider_instance in providers.items():
-        if key in ['generic']:
-            provider_instance.reseed(seed)
-        elif key in ['random']:
-            provider_instance.seed(seed)
-
-    return providers
-
-def add_custom_providers(generic, custom_providers):
-    for name, provider_class in custom_providers.items():
-        if issubclass(provider_class, BaseProvider):
-            generic.add_provider(provider_class)
-        else:
-            # If it's not a Mimesis provider, we'll add it as is
-            setattr(generic, name, provider_class())
-    return generic
-
 def generate_seeds_for_workers(regenerate=False):
     client = get_client()
     workers = client.scheduler_info()['workers']
@@ -98,8 +64,8 @@ def generate_seeds_for_workers(regenerate=False):
     return seeds
 
 def get_avg_document_size(generate_fake_document: callable, custom_providers: dict, custom_lists: dict) -> int:
-    providers = instantiate_all_providers(custom_providers)
-    providers = seed_providers(providers)
+    providers = SyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
+    providers = SyntheticDataGeneratorWorker.seed_providers(providers)
     document = generate_fake_document(providers=providers, **custom_lists)
 
     output = [document]
@@ -127,10 +93,47 @@ class SyntheticDataGeneratorWorker:
 
         :returns List of documents to be written to disk
         """
-        providers = instantiate_all_providers(custom_providers)
-        providers = seed_providers(providers, seed)
+        providers = SyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
+        providers = SyntheticDataGeneratorWorker.seed_providers(providers, seed)
 
         return [user_defined_function(providers=providers, **custom_lists) for _ in range(chunk_size)]
+
+    # We just need to ensure that reseeding is after custom data providers are added. But we also have ot ensure that custom providers have reseed abilities
+    @staticmethod
+    def instantiate_all_providers(custom_providers):
+        g = Generic(locale=Locale.DEFAULT)
+        r = Random()
+
+        if custom_providers:
+            # Updates generic provider to have custom providers. These providers must extend BaseProvider in Mimesis
+            g = SyntheticDataGeneratorWorker.add_custom_providers(g, custom_providers)
+
+        provider_instances = {
+            'generic': g,
+            'random': r
+        }
+
+        return provider_instances
+
+    @staticmethod
+    def seed_providers(providers, seed=None):
+        for key, provider_instance in providers.items():
+            if key in ['generic']:
+                provider_instance.reseed(seed)
+            elif key in ['random']:
+                provider_instance.seed(seed)
+
+        return providers
+
+    @staticmethod
+    def add_custom_providers(generic, custom_providers):
+        for name, provider_class in custom_providers.items():
+            if issubclass(provider_class, BaseProvider):
+                generic.add_provider(provider_class)
+            else:
+                # If it's not a Mimesis provider, we'll add it as is
+                setattr(generic, name, provider_class())
+        return generic
 
 class SyntheticDataGenerator:
     @staticmethod
