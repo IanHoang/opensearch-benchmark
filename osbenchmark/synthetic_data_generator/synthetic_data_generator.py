@@ -204,8 +204,8 @@ class SyntheticDataGenerator:
                   unit='B',
                   unit_scale=True,
                   bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]") as progress_bar:
-            setup_custom_tqdm_formatting(progress_bar)
 
+            setup_custom_tqdm_formatting(progress_bar)
             while current_size < total_size_bytes:
                 file_path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_{file_counter}.json")
                 file_size = 0
