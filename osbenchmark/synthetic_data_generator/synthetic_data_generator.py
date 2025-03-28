@@ -76,6 +76,33 @@ def get_avg_document_size(generate_fake_document: callable, custom_providers: di
 
     return size
 
+def format_size(bytes):
+    """Convert bytes to human-readable format."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes < 1024:
+            return f"{bytes:.2f} {unit}"
+        bytes /= 1024
+    return f"{bytes:.2f} PB"
+
+def format_time(seconds):
+    """Convert seconds to human-readable format."""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    elif seconds < 3600:
+        minutes, seconds = divmod(seconds, 60)
+        return f"{int(minutes)}m {int(seconds)}s"
+    else:
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
+
+def setup_custom_tqdm_formatting(progress_bar):
+    """Set up custom formatting for the tqdm progress bar."""
+    progress_bar.format_dict['n_fmt'] = lambda n: format_size(n)
+    progress_bar.format_dict['total_fmt'] = lambda t: format_size(t)
+    progress_bar.format_dict['elapsed'] = lambda e: format_time(e)
+    progress_bar.format_dict['remaining'] = lambda r: format_time(r)
+
 class SyntheticDataGeneratorWorker:
     @staticmethod
     def generate_data_chunk(user_defined_function: callable, chunk_size: int, custom_lists, custom_providers, seed=None):
@@ -173,7 +200,12 @@ class SyntheticDataGenerator:
 
         # from dask.distributed import performance_report
         start_time = time.time()
-        with tqdm(total=total_size_bytes) as progress_bar:
+        with tqdm(total=total_size_bytes,
+                  unit='B',
+                  unit_scale=True,
+                  bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]") as progress_bar:
+            setup_custom_tqdm_formatting(progress_bar)
+
             while current_size < total_size_bytes:
                 file_path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_{file_counter}.json")
                 file_size = 0
@@ -208,10 +240,11 @@ class SyntheticDataGenerator:
                 file_counter += 1
 
             end_time = time.time()
-            total_time_to_generate_data = end_time - start_time
+            total_time_to_generate_data = round(end_time - start_time)
             progress_bar.update(total_size_bytes - progress_bar.n)
             logger.info("Generated %s docs and %s GB dataset in %s seconds", docs_written, file_size, total_time_to_generate_data)
-            console.println(f"Generated {docs_written} docs and {file_size}GB dataset in {end_time - start_time:.2f} seconds")
+
+            return docs_written, file_size, total_time_to_generate_data
 
 def orchestrate_data_generation(cfg):
     logger = logging.getLogger(__name__)
@@ -249,10 +282,12 @@ def orchestrate_data_generation(cfg):
     elif use_custom_module(sdg_config):
         print("Starting generation")
         # Generate all documents
-        SyntheticDataGenerator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
-        logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
+        docs_written, file_size, total_time_to_generate_data = SyntheticDataGenerator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
         console.println("")
+        console.println(f"Generated {docs_written} docs and {file_size}GB dataset in {total_time_to_generate_data} seconds")
+        logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
         console.println(f"Visit the following path to view synthetically generated data: {sdg_config.output_path}")
+
     else:
         # Automated method
         pass
