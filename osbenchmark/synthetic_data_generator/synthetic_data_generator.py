@@ -78,7 +78,6 @@ def get_avg_document_size(generate_fake_document: callable, custom_providers: di
 
 class SyntheticDataGeneratorWorker:
     @staticmethod
-    # In the real Program, this should not change. This is a worker. But should this be split to where the instantiation of objects are separate from generating large chunks?
     def generate_data_chunk(user_defined_function: callable, chunk_size: int, custom_lists, custom_providers, seed=None):
         """
         Synthetic Data Generator Worker that calls a function that generates a single document.
@@ -89,7 +88,7 @@ class SyntheticDataGeneratorWorker:
         :param chunk_size: The number of documents the worker needs to generate before returning them in a list
         :param custom_lists (optional): These are custom lists that the user_defined_function uses to generate random values
         :param custom_providers (optional): These are custom providers (written in Mimesis or Faker) that generate data in a specific way.
-            Users define this in the same file as generate_fake_document() function
+            Users define this in the same file as generate_fake_document() function. Custom providers must extend from the BaseProviders class.
 
         :returns List of documents to be written to disk
         """
@@ -98,14 +97,13 @@ class SyntheticDataGeneratorWorker:
 
         return [user_defined_function(providers=seeded_providers, **custom_lists) for _ in range(chunk_size)]
 
-    # We just need to ensure that reseeding is after custom data providers are added. But we also have ot ensure that custom providers have reseed abilities
+    # We just need to ensure that reseeding is after custom data providers are added. But we also have to ensure that custom providers have reseed abilities
     @staticmethod
     def instantiate_all_providers(custom_providers):
         g = Generic(locale=Locale.DEFAULT)
         r = Random()
 
         if custom_providers:
-            # Updates generic provider to have custom providers. These providers must extend BaseProvider in Mimesis
             g = SyntheticDataGeneratorWorker.add_custom_providers(g, custom_providers)
 
         provider_instances = {
