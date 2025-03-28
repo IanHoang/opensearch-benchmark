@@ -230,13 +230,9 @@ def orchestrate_data_generation(cfg):
     print(custom_module)
     print(custom_config)
 
-    #TODO: Create Dask Dashboard
     console.println(f"Dashboard link to monitor processes and task streams: {dask_client.dashboard_link}")
     console.println("For users who are running generation on a virtual machine, consider tunneling to localhost to view dashboard.")
     console.println("")
-
-    #TODO: Add way to modify default chunk size and worker count
-    # should it be benchmark.ini file or generation.ini file or config.yml
 
     if use_custom_module(sdg_config):
         # my_seed = 1
