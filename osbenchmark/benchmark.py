@@ -198,6 +198,13 @@ def create_arg_parser():
         default=None,
         help="This should be used for when providing custom module"
     )
+    synthetic_data_generator_parser.add_argument(
+        "--test-document",
+        "-t",
+        default=False,
+        action="store_true",
+        help="Generates a single synthetic document and displays it to the console so that users can check if the output and generated values are as intended."
+    )
 
     create_workload_parser = subparsers.add_parser("create-workload", help="Create a OSB workload from existing data")
     create_workload_parser.add_argument(
@@ -1092,6 +1099,7 @@ def dispatch_sub_command(arg_parser, args, cfg):
                 cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "custom_config", args.custom_config)
                 cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "output_path", args.output_path)
                 cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "total_size", args.total_size)
+                cfg.add(config.Scope.applicationOverride, "synthetic_data_generator", "test_document", args.test_document)
 
                 synthetic_data_generator.orchestrate_data_generation(cfg)
 

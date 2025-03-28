@@ -221,39 +221,39 @@ def orchestrate_data_generation(cfg):
 
     workers = custom_config.get("workers", os.cpu_count())
     dask_client = Client(n_workers=workers, threads_per_worker=1)  # We keep it to 1 thread because generating random data is CPU intensive
-    logger.info("Number of workers to use: %s", workers)
     blueprint = sdg_config.blueprint
+    logger.info("Number of workers to use: %s", workers)
     logger.info("Blueprint: %s", json.dumps(blueprint, indent=2))
-    print(sdg_config)
-    print(custom_module)
-    print(custom_config)
+    # print(sdg_config)
+    # print(custom_module)
+    # print(custom_config)
 
-    console.println(f"Dashboard link to monitor processes and task streams: {dask_client.dashboard_link}")
-    console.println("For users who are running generation on a virtual machine, consider tunneling to localhost to view dashboard.")
+    console.println(f"[NOTE] Dashboard link to monitor processes and task streams: {dask_client.dashboard_link}")
+    console.println("[NOTE] For users who are running generation on a virtual machine, consider tunneling to localhost to view dashboard.")
     console.println("")
 
-    if use_custom_module(sdg_config):
-        # my_seed = 1
-        # generate_fake_document = custom_module.generate_fake_document
-        # custom_lists = custom_config.get('custom_lists', {})
-        # custom_providers = {name: getattr(custom_module, name) for name in custom_config.get('custom_providers', [])}
-        # # Instantiates, adds, and seeds providers them
-        # providers = instantiate_all_providers(custom_providers)
-        # providers = seed_providers(providers, my_seed)
+    if use_custom_module(sdg_config) and cfg.opts("synthetic_data_generator", "test_document"):
+            generate_fake_document = custom_module.generate_fake_document
+            custom_lists = custom_config.get('custom_lists', {})
+            custom_providers = {name: getattr(custom_module, name) for name in custom_config.get('custom_providers', [])}
 
-        # # print("Float Number: ", providers['generic'].numeric.float_number(start=0, end=10))
-        # # print("Numeric String: ", providers['generic'].numeric_string.generate(length=9))
+            providers = SyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
+            providers = SyntheticDataGeneratorWorker.seed_providers(providers)
 
-        # document = generate_fake_document(providers=providers, **custom_lists)
-        # print(json.dumps(document, indent=2))
+            document = generate_fake_document(providers=providers, **custom_lists)
 
+            console.println("Generating a single test document:")
+            console.println("Please verify that the output is generated as intended. \n")
+            print(json.dumps(document, indent=2))
+
+    elif use_custom_module(sdg_config):
         print("Starting generation")
         # Generate all documents
         SyntheticDataGenerator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
+        logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
+        console.println("")
+        console.println(f"Visit the following path to view synthetically generated data: {sdg_config.output_path}")
     else:
         # Automated method
         pass
 
-    logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
-    console.println("")
-    console.println(f"Visit the following path to view synthetically generated data: {sdg_config.output_path}")
