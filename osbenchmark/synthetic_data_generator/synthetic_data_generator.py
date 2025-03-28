@@ -94,9 +94,9 @@ class SyntheticDataGeneratorWorker:
         :returns List of documents to be written to disk
         """
         providers = SyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
-        providers = SyntheticDataGeneratorWorker.seed_providers(providers, seed)
+        seeded_providers = SyntheticDataGeneratorWorker.seed_providers(providers, seed)
 
-        return [user_defined_function(providers=providers, **custom_lists) for _ in range(chunk_size)]
+        return [user_defined_function(providers=seeded_providers, **custom_lists) for _ in range(chunk_size)]
 
     # We just need to ensure that reseeding is after custom data providers are added. But we also have ot ensure that custom providers have reseed abilities
     @staticmethod
