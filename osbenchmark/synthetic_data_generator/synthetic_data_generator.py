@@ -64,8 +64,8 @@ def generate_seeds_for_workers(regenerate=False):
     return seeds
 
 def get_avg_document_size(generate_fake_document: callable, custom_providers: dict, custom_lists: dict) -> int:
-    providers = SyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
-    providers = SyntheticDataGeneratorWorker.seed_providers(providers)
+    providers = CustomSyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
+    providers = CustomSyntheticDataGeneratorWorker.seed_providers(providers)
     document = generate_fake_document(providers=providers, **custom_lists)
 
     output = [document]
@@ -77,7 +77,6 @@ def get_avg_document_size(generate_fake_document: callable, custom_providers: di
     return size
 
 def format_size(bytes):
-    """Convert bytes to human-readable format."""
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
         if bytes < 1024:
             return f"{bytes:.2f} {unit}"
@@ -85,7 +84,6 @@ def format_size(bytes):
     return f"{bytes:.2f} PB"
 
 def format_time(seconds):
-    """Convert seconds to human-readable format."""
     if seconds < 60:
         return f"{seconds:.1f}s"
     elif seconds < 3600:
@@ -103,7 +101,7 @@ def setup_custom_tqdm_formatting(progress_bar):
     progress_bar.format_dict['elapsed'] = lambda e: format_time(e)
     progress_bar.format_dict['remaining'] = lambda r: format_time(r)
 
-class SyntheticDataGeneratorWorker:
+class CustomSyntheticDataGeneratorWorker:
     @staticmethod
     def generate_data_chunk(user_defined_function: callable, chunk_size: int, custom_lists, custom_providers, seed=None):
         """
@@ -119,8 +117,8 @@ class SyntheticDataGeneratorWorker:
 
         :returns List of documents to be written to disk
         """
-        providers = SyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
-        seeded_providers = SyntheticDataGeneratorWorker.seed_providers(providers, seed)
+        providers = CustomSyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
+        seeded_providers = CustomSyntheticDataGeneratorWorker.seed_providers(providers, seed)
 
         return [user_defined_function(providers=seeded_providers, **custom_lists) for _ in range(chunk_size)]
 
@@ -131,7 +129,7 @@ class SyntheticDataGeneratorWorker:
         r = Random()
 
         if custom_providers:
-            g = SyntheticDataGeneratorWorker.add_custom_providers(g, custom_providers)
+            g = CustomSyntheticDataGeneratorWorker.add_custom_providers(g, custom_providers)
 
         provider_instances = {
             'generic': g,
@@ -160,7 +158,7 @@ class SyntheticDataGeneratorWorker:
                 setattr(generic, name, provider_class())
         return generic
 
-class SyntheticDataGenerator:
+class CustomSyntheticDataGenerator:
     @staticmethod
     def generate_dataset_with_user_module(client, sdg_config, user_module, user_config):
         """
@@ -217,7 +215,7 @@ class SyntheticDataGenerator:
 
                     # Test if 40GB works by removing seed and just doing for _ in range(workers)
                     # with performance_report(filename="financial_mimesis_10GB.html"):
-                    futures = [client.submit(SyntheticDataGeneratorWorker.generate_data_chunk, generate_fake_document, chunk_size, custom_lists, custom_providers, seed) for seed in seeds]
+                    futures = [client.submit(CustomSyntheticDataGeneratorWorker.generate_data_chunk, generate_fake_document, chunk_size, custom_lists, custom_providers, seed) for seed in seeds]
                     results = client.gather(futures) # if using AS_COMPLETED remove this line
 
                     writing_start_time = time.time()
@@ -270,8 +268,8 @@ def orchestrate_data_generation(cfg):
             custom_lists = custom_config.get('custom_lists', {})
             custom_providers = {name: getattr(custom_module, name) for name in custom_config.get('custom_providers', [])}
 
-            providers = SyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
-            providers = SyntheticDataGeneratorWorker.seed_providers(providers)
+            providers = CustomSyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
+            providers = CustomSyntheticDataGeneratorWorker.seed_providers(providers)
 
             document = generate_fake_document(providers=providers, **custom_lists)
 
@@ -282,7 +280,7 @@ def orchestrate_data_generation(cfg):
     elif use_custom_module(sdg_config):
         print("Starting generation")
         # Generate all documents
-        docs_written, file_size, total_time_to_generate_data = SyntheticDataGenerator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
+        docs_written, file_size, total_time_to_generate_data = CustomSyntheticDataGenerator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
         console.println("")
         console.println(f"Generated {docs_written} docs and {file_size}GB dataset in {total_time_to_generate_data} seconds")
         logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
