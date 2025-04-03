@@ -264,23 +264,28 @@ def orchestrate_data_generation(cfg):
     console.println("")
 
     if use_custom_module(sdg_config) and cfg.opts("synthetic_data_generator", "test_document"):
-            generate_fake_document = custom_module.generate_fake_document
-            custom_lists = custom_config.get('custom_lists', {})
-            custom_providers = {name: getattr(custom_module, name) for name in custom_config.get('custom_providers', [])}
+        generate_fake_document = custom_module.generate_fake_document
+        custom_lists = custom_config.get('custom_lists', {})
+        custom_providers = {name: getattr(custom_module, name) for name in custom_config.get('custom_providers', [])}
 
-            providers = CustomSyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
-            providers = CustomSyntheticDataGeneratorWorker.seed_providers(providers)
+        providers = CustomSyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
+        providers = CustomSyntheticDataGeneratorWorker.seed_providers(providers)
 
-            document = generate_fake_document(providers=providers, **custom_lists)
+        document = generate_fake_document(providers=providers, **custom_lists)
 
-            console.println("Generating a single test document:")
-            console.println("Please verify that the output is generated as intended. \n")
-            print(json.dumps(document, indent=2))
+        console.println("Generating a single test document:")
+        console.println("Please verify that the output is generated as intended. \n")
+        print(json.dumps(document, indent=2))
 
     elif use_custom_module(sdg_config):
         print("Starting generation")
         # Generate all documents
         docs_written, file_size, total_time_to_generate_data = CustomSyntheticDataGenerator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
+        record = {"index-name": sdg_config.index_name, "docs_written": docs_written, "file_size": file_size, "total_time_to_generate_data": total_time_to_generate_data}
+        path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_record.json")
+        with open(path, 'w') as file:
+            file.write(record)
+
         console.println("")
         console.println(f"Generated {docs_written} docs and {file_size}GB dataset in {total_time_to_generate_data} seconds")
         logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
