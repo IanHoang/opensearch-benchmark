@@ -281,10 +281,11 @@ def orchestrate_data_generation(cfg):
         print("Starting generation")
         # Generate all documents
         docs_written, file_size, total_time_to_generate_data = CustomSyntheticDataGenerator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
+
         record = {"index-name": sdg_config.index_name, "docs_written": docs_written, "file_size": file_size, "total_time_to_generate_data": total_time_to_generate_data}
         path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_record.json")
         with open(path, 'w') as file:
-            file.write(record)
+            json.dump(record, file, indent=2)
 
         console.println("")
         console.println(f"Generated {docs_written} docs and {file_size}GB dataset in {total_time_to_generate_data} seconds")
