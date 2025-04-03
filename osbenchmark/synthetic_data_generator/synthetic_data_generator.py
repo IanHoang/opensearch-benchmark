@@ -266,9 +266,6 @@ def orchestrate_data_generation(cfg):
     blueprint = sdg_config.blueprint
     logger.info("Number of workers to use: %s", workers)
     logger.info("Blueprint: %s", json.dumps(blueprint, indent=2))
-    # print(sdg_config)
-    # print(custom_module)
-    # print(custom_config)
 
     console.println(f"[NOTE] Dashboard link to monitor processes and task streams: {dask_client.dashboard_link}")
     console.println("[NOTE] For users who are running generation on a virtual machine, consider tunneling to localhost to view dashboard.")
@@ -276,8 +273,11 @@ def orchestrate_data_generation(cfg):
 
     if use_custom_module(sdg_config) and cfg.opts("synthetic_data_generator", "test_document"):
         generate_fake_document = custom_module.generate_fake_document
-        custom_lists = custom_config.get('custom_lists', {})
-        custom_providers = {name: getattr(custom_module, name) for name in custom_config.get('custom_providers', [])}
+        custom_module_components = custom_config.get('CustomModule', {})
+
+        custom_lists = custom_module_components.get('custom_lists', {})
+        custom_providers = {name: getattr(custom_module, name) for name in custom_module_components.get('custom_providers', [])}
+
 
         providers = CustomSyntheticDataGeneratorWorker.instantiate_all_providers(custom_providers)
         providers = CustomSyntheticDataGeneratorWorker.seed_providers(providers)
