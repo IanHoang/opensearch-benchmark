@@ -179,11 +179,16 @@ class CustomSyntheticDataGenerator:
         """
         logger = logging.getLogger(__name__)
 
-        custom_lists = user_config.get('custom_lists', {})
-        custom_providers = {name: getattr(user_module, name) for name in user_config.get('custom_providers', [])}
-        max_file_size_bytes = user_config.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB) * 1024 * 1024 * 1024
+        # Fetch settings and custom module components from config that user provided
+        generation_settings = user_config.get('settings', {})
+        custom_module_components = user_config.get('CustomModule', {})
+
+        custom_lists = custom_module_components.get('custom_lists', {})
+        custom_providers = {name: getattr(user_module, name) for name in custom_module_components.get('custom_providers', [])}
+
+        max_file_size_bytes = generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB) * 1024 * 1024 * 1024
         total_size_bytes = sdg_config.total_size_gb * 1024 * 1024 * 1024
-        chunk_size = user_config.get('chunk_size', DEFAULT_CHUNK_SIZE)  # Adjust this based on your memory constraints
+        chunk_size = generation_settings.get('chunk_size', DEFAULT_CHUNK_SIZE)  # Adjust this based on your memory constraints
 
         generate_fake_document = user_module.generate_fake_document
         avg_document_size = get_avg_document_size(generate_fake_document, custom_providers, custom_lists)
@@ -195,6 +200,10 @@ class CustomSyntheticDataGenerator:
         logger.info("Average document size: %s", avg_document_size)
         logger.info("Chunk size: %s docs", chunk_size)
         logger.info("Total GB to generate: %s", sdg_config.total_size_gb)
+        logger.info("Max file size in GB: %s", generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB))
+
+        console.println(f"Total GB to generate: {sdg_config.total_size_gb}\n"
+                        f"Max file size in GB: {generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB)}\n")
 
         # from dask.distributed import performance_report
         start_time = time.time()
