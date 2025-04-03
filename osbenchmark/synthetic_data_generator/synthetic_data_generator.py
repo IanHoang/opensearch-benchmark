@@ -247,11 +247,13 @@ class CustomSyntheticDataGenerator:
                 file_counter += 1
 
             end_time = time.time()
-            total_time_to_generate_data = round(end_time - start_time)
+            total_time_to_generate_dataset = round(end_time - start_time)
             progress_bar.update(total_size_bytes - progress_bar.n)
-            logger.info("Generated %s docs and %s GB dataset in %s seconds", docs_written, file_size, total_time_to_generate_data)
 
-            return docs_written, file_size, total_time_to_generate_data
+            dataset_size = current_size
+            logger.info("Generated %s docs in %s seconds. Total dataset size is %s GB", docs_written, total_time_to_generate_dataset, dataset_size)
+
+            return docs_written, total_time_to_generate_dataset, dataset_size
 
 def orchestrate_data_generation(cfg):
     logger = logging.getLogger(__name__)
@@ -289,10 +291,10 @@ def orchestrate_data_generation(cfg):
     elif use_custom_module(sdg_config):
         print("Starting generation")
         # Generate all documents
-        docs_written, file_size, total_time_to_generate_data = CustomSyntheticDataGenerator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
+        docs_written, total_time_to_generate_dataset, dataset_size = CustomSyntheticDataGenerator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
 
-        record = {"index-name": sdg_config.index_name, "docs_written": docs_written, "file_size": file_size, "total_time_in_seconds_to_generate_data": total_time_to_generate_data}
-        summary = f"Generated {docs_written} docs and {file_size}GB dataset in {total_time_to_generate_data} seconds"
+        record = {"index-name": sdg_config.index_name, "docs_added": docs_written, "dataset_size": dataset_size, "total_time_in_seconds_to_generate_docs_added": total_time_to_generate_dataset}
+        summary = f"Generated {docs_written} docs in {total_time_to_generate_dataset} seconds. Total dataset size is {dataset_size}GB."
         path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_record.json")
         with open(path, 'w') as file:
             json.dump(record, file, indent=2)
