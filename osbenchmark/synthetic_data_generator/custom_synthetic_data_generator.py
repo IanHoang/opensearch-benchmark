@@ -169,7 +169,7 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
 
         # Fetch settings and custom module components from config that user provided
         generation_settings = user_config.get('settings', {})
-        custom_module_components = user_config.get('CustomModule', {})
+        custom_module_components = user_config.get('CustomSyntheticDataGenerator', {})
 
         custom_lists = custom_module_components.get('custom_lists', {})
         custom_providers = {name: getattr(user_module, name) for name in custom_module_components.get('custom_providers', [])}

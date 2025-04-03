@@ -46,7 +46,7 @@ def orchestrate_data_generation(cfg):
     if use_custom_module(sdg_config) and cfg.opts("synthetic_data_generator", "test_document"):
         custom_module = custom_synthetic_data_generator.load_user_module(sdg_config.custom_module_path)
         generate_fake_document = custom_module.generate_fake_document
-        custom_module_components = custom_config.get('CustomModule', {})
+        custom_module_components = custom_config.get('CustomSyntheticDataGenerator', {})
 
         custom_lists = custom_module_components.get('custom_lists', {})
         custom_providers = {name: getattr(custom_module, name) for name in custom_module_components.get('custom_providers', [])}
