@@ -21,7 +21,7 @@ from mimesis.random import Random
 from tqdm import tqdm
 
 from osbenchmark.utils import console
-from osbenchmark.synthetic_data_generator.input_processor import create_sdg_config_from_args, use_custom_module
+# from osbenchmark.synthetic_data_generator.input_processor import create_sdg_config_from_args, use_custom_synthetic_data_generator
 from osbenchmark.synthetic_data_generator.types import DEFAULT_MAX_FILE_SIZE_GB, DEFAULT_CHUNK_SIZE
 
 def load_user_module(file_path):

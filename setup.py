@@ -109,6 +109,7 @@ install_requires = [
     "numpy>=1.24.2,<=1.26.4",
     "tqdm",
     "faker",
+    # This version is required for Python 3.8 and 3.9 to work
     "mimesis==11.1.0",
     "dask",
     "dask[distributed]",
