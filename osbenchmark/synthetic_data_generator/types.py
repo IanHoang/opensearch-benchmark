@@ -7,6 +7,7 @@
 # GitHub history for details.
 
 import argparse
+import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -15,6 +16,12 @@ from enum import Enum
 
 DEFAULT_MAX_FILE_SIZE_GB=40
 DEFAULT_CHUNK_SIZE=10000
+
+DEFAULT_GENERATION_SETTINGS = {
+    "workers": os.cpu_count(),
+    "max_file_size_gb": 40,
+    "chunk_size": 10000
+}
 
 @dataclass
 class SyntheticDataGeneratorConfig:

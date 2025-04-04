@@ -21,7 +21,8 @@ from tqdm import tqdm
 
 from osbenchmark.utils import console
 from osbenchmark.synthetic_data_generator.types import DEFAULT_MAX_FILE_SIZE_GB, DEFAULT_CHUNK_SIZE, SyntheticDataGeneratorConfig
-    
+from osbenchmark.synthetic_data_generator.helpers import get_generation_settings
+
 def write_chunk(data, file_path):
     with open(file_path, 'a') as f:
         for item in data:
@@ -39,7 +40,7 @@ class MappingSyntheticDataGenerator:
         self.generic.reseed(seed)
         self.random.seed(seed)
 
-        # seed these 
+        # seed these
 
         self.type_generators = {
             "text": self.generate_text,
@@ -57,7 +58,7 @@ class MappingSyntheticDataGenerator:
             "nested": self.generate_nested,
             "geo_point": self.generate_geo_point,
         }
-    
+
     def generate_text(self, field_def: Dict[str, Any],  **params) -> str:
         choices = params.get('must_include', None)
         analyzer = field_def.get("analyzer", "standard")
@@ -65,15 +66,15 @@ class MappingSyntheticDataGenerator:
         text = ""
         if choices:
             term = random.choice(choices)
-            text += f" {term}"
+            text += f"{term} "
         if analyzer == "keyword":
             text += f"keyword_{uuid.uuid4().hex[:8]}"
             return text
 
         text += f"Sample text for {random.randint(1, 100)}"
         return text
-    
-    
+
+
     def generate_keyword(self, field_def: Dict[str, Any], **params) -> str:
         choices = params.get('choices', None)
         if choices:
@@ -81,33 +82,33 @@ class MappingSyntheticDataGenerator:
             return keyword
         else:
             return f"key_{uuid.uuid4().hex[:8]}"
-    
+
     def generate_long(self, field_def: Dict[str, Any]) -> int:
         return random.randint(-9223372036854775808, 9223372036854775807)
-    
+
     def generate_integer(self, field_def: Dict[str, Any], **params) -> int:
         min = params.get('min', -2147483648)
         max = params.get('max', 2147483647)
 
         return random.randint(min, max)
-    
+
     def generate_short(self, field_def: Dict[str, Any]) -> int:
         return random.randint(-32768, 32767)
-    
+
     def generate_byte(self, field_def: Dict[str, Any]) -> int:
         return random.randint(-128, 127)
-    
+
     def generate_double(self, field_def: Dict[str, Any]) -> float:
         return random.uniform(-1000000, 1000000)
-    
+
     def generate_float(self, field_def: Dict[str, Any], **params) -> float:
         min = params.get('min', 0)
         max = params.get('max', 1000)
         return random.uniform(-1000, 1000)
-    
+
     def generate_boolean(self, field_def: Dict[str, Any]) -> bool:
         return random.choice([True, False])
-    
+
     def generate_date(self, field_def: Dict[str, Any], **params) -> str:
         # Default to ISO format unless a specific format is defined
         date_format = field_def.get("format", "yyyy-mm-dd")
@@ -129,24 +130,24 @@ class MappingSyntheticDataGenerator:
         elif date_format == "yyyy-MM-dd'T'HH:mm:ssZ":
             return random_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         return random_date.isoformat()  # Default ISO format
-    
+
     def generate_ip(self, field_def: Dict[str, Any]) -> str:
         return f"{random.randint(1, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
-    
+
     def generate_geo_point(self, field_def: Dict[str, Any]) -> Dict[str, float]:
         return {
             "lat": random.uniform(-90, 90),
             "lon": random.uniform(-180, 180)
         }
-    
+
     def generate_object(self, field_def: Dict[str, Any]) -> Dict[str, Any]:
         # This will be replaced by the nested fields generator
         return {}
-    
+
     def generate_nested(self, field_def: Dict[str, Any]) -> list:
         # Will be replaced by a list of nested objects
         return []
-    
+
     def transform_mapping_to_generators(self, mapping_dict: Dict[str, Any]) -> Dict[str, Callable[[], Any]]:
         """
         Transform an OpenSearch mapping into a dictionary of generator functions.
@@ -202,14 +203,14 @@ class MappingSyntheticDataGenerator:
 
         return generator_dict
 
-    
+
     def _generate_obj(self, field_def: Dict[str, Any], nested_generators: Dict[str, Callable]) -> Dict[str, Any]:
         """Generate an object using nested generators"""
         result = {}
         for field_name, generator in nested_generators.items():
             result[field_name] = generator()
         return result
-    
+
     def _generate_nested_array(self, field_def: Dict[str, Any], nested_generators: Dict[str, Callable], min_items=1, max_items=3) -> list:
         """Generate nested array of objects"""
         count = random.randint(min_items, max_items)
@@ -220,21 +221,21 @@ class MappingSyntheticDataGenerator:
                 obj[field_name] = generator()
             result.append(obj)
         return result
-    
+
     def generate_fake_document(self, generator_dict: Dict[str, Callable]) -> Dict[str, Any]:
         """
         Generate a document using the generator functions
-        
+
         Args:
             generator_dict: Dictionary of generator functions
-            
+
         Returns:
             document containing lambdas that cna be invoked to generate data
         """
         document = {}
         for field_name, generator in generator_dict.items():
             document[field_name] = generator()
-            
+
         return document
 
 
@@ -257,7 +258,7 @@ def load_mapping_and_config(mapping_file_path, config_path=None):
         with open(config_path, "r") as f:
             config_dict = yaml.safe_load(f)
 
-    return mapping_dict, config_dict  
+    return mapping_dict, config_dict
 
 def generate_seeds_for_workers(regenerate=False):
     client = get_client()
@@ -313,20 +314,20 @@ def get_avg_document_size(index_mappings: dict, mapping_config: dict) -> int:
 
     return size
 
-def generate_test_document(index_mappings: dict, mapping_config: dict) -> dict: 
+def generate_test_document(index_mappings: dict, mapping_config: dict) -> dict:
     mapping_generator = MappingSyntheticDataGenerator(mapping_config)
     converted_mappings = mapping_generator.transform_mapping_to_generators(index_mappings)
-    
+
     return mapping_generator.generate_fake_document(generator_dict=converted_mappings)
-    
+
 
 class MappingSyntheticDataGeneratorWorker:
     @staticmethod
     def generate_documents_from_worker(index_mappings, mapping_config, chunk_size):
         """
-        Within the scope of a Dask worker. Initially reconstructs the MappingSyntheticDataGenerator and generates documents. 
-        This is because Dask coordinator needs to serialize and deserialize objects when passing them to a worker. 
-        Generates the generate_fake_document, which gets invoked N number of times before returning a list of documents. 
+        Within the scope of a Dask worker. Initially reconstructs the MappingSyntheticDataGenerator and generates documents.
+        This is because Dask coordinator needs to serialize and deserialize objects when passing them to a worker.
+        Generates the generate_fake_document, which gets invoked N number of times before returning a list of documents.
 
         param: mapping_dict (dict): The OpenSearch mapping dictionary.
         param: config_dict (dict): Optional YAML-based config for value constraints.
@@ -356,13 +357,13 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
         logger = logging.getLogger(__name__)
 
         # Fetch settings and input config that user provided
-        generation_settings = input_config.get('settings', {})
-        # mapping_config = input_config.get('MappingSyntheticDataGenerator', {})
+        generation_settings = get_generation_settings(input_config)
+        print(generation_settings)
         mapping_config = input_config
 
-        max_file_size_bytes = generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB) * 1024 * 1024 * 1024
+        max_file_size_bytes = generation_settings.get('max_file_size_gb') * 1024 * 1024 * 1024
         total_size_bytes = sdg_config.total_size_gb * 1024 * 1024 * 1024
-        chunk_size = generation_settings.get('chunk_size', DEFAULT_CHUNK_SIZE)  # Adjust this based on your memory constraints
+        chunk_size = generation_settings.get('chunk_size')  # Adjust this based on your memory constraints
         avg_document_size = get_avg_document_size(index_mappings, mapping_config)
 
         current_size = 0
@@ -372,10 +373,10 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
         logger.info("Average document size: %s", avg_document_size)
         logger.info("Chunk size: %s docs", chunk_size)
         logger.info("Total GB to generate: %s", sdg_config.total_size_gb)
-        logger.info("Max file size in GB: %s", generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB))
+        logger.info("Max file size in GB: %s", generation_settings.get('max_file_size_gb'))
 
         console.println(f"Total GB to generate: {sdg_config.total_size_gb}\n"
-                        f"Max file size in GB: {generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB)}\n")
+                        f"Max file size in GB: {generation_settings.get('max_file_size_gb')}\n")
 
         start_time = time.time()
         with tqdm(total=total_size_bytes,
