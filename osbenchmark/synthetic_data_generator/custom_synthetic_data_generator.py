@@ -21,10 +21,16 @@ from mimesis.random import Random
 from tqdm import tqdm
 
 from osbenchmark.utils import console
+from osbenchmark.exceptions import SystemSetupError
 # from osbenchmark.synthetic_data_generator.input_processor import create_sdg_config_from_args, use_custom_synthetic_data_generator
 from osbenchmark.synthetic_data_generator.types import DEFAULT_MAX_FILE_SIZE_GB, DEFAULT_CHUNK_SIZE
 
 def load_user_module(file_path):
+    allowed_extensions = ['.py']
+    extension = os.path.splitext(file_path)[1]
+    if extension not in allowed_extensions:
+        raise SystemSetupError(f"User provided module with file extension [{extension}]. Python modules must have {allowed_extensions} extension.")
+
     spec = importlib.util.spec_from_file_location("user_module", file_path)
     user_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(user_module)
@@ -91,10 +97,13 @@ def setup_custom_tqdm_formatting(progress_bar):
     progress_bar.format_dict['remaining'] = lambda r: format_time(r)
 
 def instantiate_all_providers(custom_providers):
+        logger = logging.getLogger(__name__)
         g = Generic(locale=Locale.DEFAULT)
         r = Random()
 
+        logger.info("HERE START")
         if custom_providers:
+            logger.info("HERE ADD THEM")
             g = add_custom_providers(g, custom_providers)
 
         provider_instances = {
@@ -114,15 +123,20 @@ def seed_providers(providers, seed=None):
     return providers
 
 def add_custom_providers(generic, custom_providers):
+    logger = logging.getLogger(__name__)
     for name, provider_class in custom_providers.items():
         if issubclass(provider_class, BaseProvider):
+            logger.info("HERE")
             generic.add_provider(provider_class)
+            logger.info("HERE AFTER ADD")
         else:
             # If it's not a Mimesis provider, we'll add it as is
             setattr(generic, name, provider_class())
     return generic
 
 def generate_test_document(generate_fake_document: callable, custom_lists: dict, custom_providers: dict) -> dict:
+        logger = logging.getLogger(__name__)
+        logger.info("HERE")
         providers = instantiate_all_providers(custom_providers)
         providers = seed_providers(providers)
 
@@ -185,6 +199,8 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
         docs_written = 0
         file_counter = 0
 
+        generated_dataset_details = []
+
         logger.info("Average document size: %s", avg_document_size)
         logger.info("Chunk size: %s docs", chunk_size)
         logger.info("Total GB to generate: %s", sdg_config.total_size_gb)
@@ -203,13 +219,13 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
             while current_size < total_size_bytes:
                 file_path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_{file_counter}.json")
                 file_size = 0
+                docs_written = 0
 
                 while file_size < max_file_size_bytes:  # 40GB make this configurable in the benchmark.ini or generation.ini or config.yml
                     generation_start_time = time.time()
                     seeds = generate_seeds_for_workers(regenerate=True)
                     logger.info("Using seeds: %s", seeds)
 
-                    # Test if 40GB works by removing seed and just doing for _ in range(workers)
                     # with performance_report(filename="financial_mimesis_10GB.html"):
                     futures = [client.submit(generate_data_chunk, generate_fake_document, chunk_size, custom_lists, custom_providers, seed) for seed in seeds]
                     results = client.gather(futures) # if using AS_COMPLETED remove this line
@@ -222,13 +238,30 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
                         current_size += written_size
                         progress_bar.update(written_size)
 
-                    file_size = os.path.getsize(file_path)
                     writing_end_time = time.time()
+
+                    file_size = os.path.getsize(file_path)
+                    # If it exceeds the max file size, then append this to keep track of record
+                    if file_size >= max_file_size_bytes:
+                        file_name = file_path.split("/")[-1]
+                        generated_dataset_details.append({
+                            "file_name": file_name,
+                            "docs": docs_written,
+                            "file_size_bytes": file_size
+                        })
+
                     generating_took_time = writing_start_time - generation_start_time
                     writing_took_time = writing_end_time - writing_start_time
                     logger.info("Generating took [%s] seconds", generating_took_time)
                     logger.info("Writing took [%s] seconds", writing_took_time)
+
                     if current_size >= total_size_bytes:
+                        file_name = file_path.split("/")[-1]
+                        generated_dataset_details.append({
+                            "file_name": file_name,
+                            "docs": docs_written,
+                            "file_size_bytes": file_size
+                        })
                         break
 
                 file_counter += 1
@@ -238,6 +271,6 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
             progress_bar.update(total_size_bytes - progress_bar.n)
 
             dataset_size = current_size
-            logger.info("Generated %s docs in %s seconds. Total dataset size is %s GB", docs_written, total_time_to_generate_dataset, dataset_size)
+            logger.info("Generated dataset in %s seconds. Dataset generation details: %s", total_time_to_generate_dataset, generated_dataset_details)
 
-            return docs_written, total_time_to_generate_dataset, dataset_size
+            return total_time_to_generate_dataset, generated_dataset_details
