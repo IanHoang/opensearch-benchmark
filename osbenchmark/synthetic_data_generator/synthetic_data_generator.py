@@ -33,7 +33,6 @@ def orchestrate_data_generation(cfg):
 
     # TODO: Rename custom config
     custom_config = load_config(sdg_config.custom_config_path)
-    logger.info("HERE WITH CONFIG %s", custom_config)
 
     # TODO: Move client creation to outside of orchestrator so that synthetic data generators can call on it
     workers = custom_config.get("workers", os.cpu_count())

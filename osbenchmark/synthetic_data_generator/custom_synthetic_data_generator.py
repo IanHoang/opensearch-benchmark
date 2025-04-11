@@ -97,21 +97,18 @@ def setup_custom_tqdm_formatting(progress_bar):
     progress_bar.format_dict['remaining'] = lambda r: format_time(r)
 
 def instantiate_all_providers(custom_providers):
-        logger = logging.getLogger(__name__)
-        g = Generic(locale=Locale.DEFAULT)
-        r = Random()
+    g = Generic(locale=Locale.DEFAULT)
+    r = Random()
 
-        logger.info("HERE START")
-        if custom_providers:
-            logger.info("HERE ADD THEM")
-            g = add_custom_providers(g, custom_providers)
+    if custom_providers:
+        g = add_custom_providers(g, custom_providers)
 
-        provider_instances = {
-            'generic': g,
-            'random': r
-        }
+    provider_instances = {
+        'generic': g,
+        'random': r
+    }
 
-        return provider_instances
+    return provider_instances
 
 def seed_providers(providers, seed=None):
     for key, provider_instance in providers.items():
@@ -123,20 +120,15 @@ def seed_providers(providers, seed=None):
     return providers
 
 def add_custom_providers(generic, custom_providers):
-    logger = logging.getLogger(__name__)
     for name, provider_class in custom_providers.items():
         if issubclass(provider_class, BaseProvider):
-            logger.info("HERE")
             generic.add_provider(provider_class)
-            logger.info("HERE AFTER ADD")
         else:
             # If it's not a Mimesis provider, we'll add it as is
             setattr(generic, name, provider_class())
     return generic
 
 def generate_test_document(generate_fake_document: callable, custom_lists: dict, custom_providers: dict) -> dict:
-        logger = logging.getLogger(__name__)
-        logger.info("HERE")
         providers = instantiate_all_providers(custom_providers)
         providers = seed_providers(providers)
 
