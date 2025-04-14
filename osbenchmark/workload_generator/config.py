@@ -8,6 +8,7 @@
 
 from dataclasses import dataclass, field
 from typing import List
+import os
 
 @dataclass
 class Index:
@@ -19,7 +20,7 @@ class Index:
 @dataclass
 class CustomWorkload:
     workload_name: str = None
-    output_path: str = None
+    output_path: str = None # Already gets current working directory through argparse
     workload_path: str = None
     operations_path: str = None
     test_procedures_path: str = None

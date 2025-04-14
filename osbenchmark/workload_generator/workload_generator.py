@@ -8,6 +8,7 @@
 
 import logging
 import os
+import json
 
 from osbenchmark import PROGRAM_NAME, exceptions
 from osbenchmark.client import OsClientFactory
@@ -88,6 +89,18 @@ def create_workload(cfg):
 
     # Render all templates
     custom_workload_writer.render_templates(template_vars, custom_workload.queries)
+
+    # Write exportable template
+    record_path = f"{custom_workload.workload_path}/{custom_workload.workload_name}_record.json"
+    if os.path.exists(record_path):
+        console.println("Record file already exists. Overriding")
+
+    try:
+        with open(record_path, 'w') as file:
+            json.dump(template_vars, file, indent=2)
+        print(f"Record successfully written to '{record_path}'")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
     console.println("")
     console.info(f"Workload {workload_name} has been created. Run it with: {PROGRAM_NAME} --workload-path={custom_workload.workload_path}")

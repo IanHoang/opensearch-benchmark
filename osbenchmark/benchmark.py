@@ -161,19 +161,16 @@ def create_arg_parser():
     create_workload_parser.add_argument(
         "--workload",
         "-w",
-        required=True,
         help="Name of the generated workload")
     create_workload_parser.add_argument(
         "--indices",
         "-i",
         type=non_empty_list,
-        required=True,
         help="Comma-separated list of indices to include in the workload")
     create_workload_parser.add_argument(
         "--target-hosts",
         "-t",
         default="",
-        required=True,
         help="Comma-separated list of host:port pairs which should be targeted")
     create_workload_parser.add_argument(
         "--client-options",
@@ -195,6 +192,21 @@ def create_arg_parser():
         metavar="KEY:VAL",
         help="Map of index name and integer doc count to extract. Ensure that index name also exists in --indices parameter. " +
         "To specify several indices and doc counts, use format: <index1>:<doc_count1> <index2>:<doc_count2> ...")
+    create_workload_parser.add_argument(
+        "--merge",
+        action="store_true",
+        help="Merge existing OSB workloads together into one workload. Must use --merge-name, --merge-workloads, --output-path and no other parameters")
+    create_workload_parser.add_argument(
+        "--merge-name",
+        type=non_empty_list,
+        help="Comma-separated list of indices to include in the workload")
+    create_workload_parser.add_argument(
+        "--merge-workloads",
+        action=opts.StoreKeyPairAsDict,
+        nargs='+',
+        metavar="KEY:VAL",
+        help="Map of different OSB workloads name and their paths." +
+        "To specify several indices and doc counts, use format: <workload1>:<workload1-path> <workload2><workload2-path> ...")
 
     compare_parser = subparsers.add_parser("compare", help="Compare two test_executions")
     compare_parser.add_argument(
@@ -817,8 +829,6 @@ def with_actor_system(runnable, cfg):
                 console.warn("Could not terminate all internal processes within timeout. Please check and force-terminate "
                              "all OSB processes.")
 
-
-
 def configure_telemetry_params(args, cfg):
     cfg.add(config.Scope.applicationOverride, "telemetry", "devices", opts.csv_to_list(args.telemetry))
     cfg.add(config.Scope.applicationOverride, "telemetry", "params", opts.to_dict(args.telemetry_params))
@@ -960,6 +970,50 @@ def configure_test(arg_parser, args, cfg):
 
     configure_results_publishing_params(args, cfg)
 
+def validate_create_workload_params(arg_parser, args):
+    create_workload_ruleset = {
+        "default": {
+            "required_params": ["--workload", "--indices", "--target-hosts", "--client-options"],
+            "optional_params": ["--output-path", "--number-of-docs", "--custom-queries", "--sample-frequency"],
+            "invalid_params": ["--merge-name", "--merge-workloads"],
+            "required_params_found": [args.workload, args.indices, args.target_hosts, args.client_options],
+            "optional_params_found": [args.output_path, args.number_of_docs, args.custom_queries, args.sample_frequency],
+            "invalid_params_found": [args.merge_name, args.merge_workloads]
+        },
+        "merge": {
+            "required_params": ["--merge-name", "--merge-workloads", "--output-path"],
+            "invalid_params": ["--workload", "--indices", "--target-hosts", "--client-options", "--number-of-docs", "--custom-queries", "--sample-frequency"],
+            "required_params_found": [args.merge_name, args.merge_workloads, args.output_path],
+            "invalid_params_found": [args.workload, args.indices, args.target_hosts, args.client_options, args.number_of_docs, args.custom_queries, args.sample_frequency]
+        }
+    }
+    logger = logging.getLogger(__name__)
+
+    if args.merge:
+        if any(create_workload_ruleset["merge"]["invalid_params_found"]):
+            logger.info(create_workload_ruleset["merge"]["invalid_params_found"])
+            invalid_params = create_workload_ruleset["merge"]["invalid_params"]
+            error_msg = f"If using --merge, ensure you are not using: {invalid_params}"
+            arg_parser.error(error_msg)
+        if not all(create_workload_ruleset["merge"]["required_params_found"]):
+            logger.info(create_workload_ruleset["merge"]["required_params_found"])
+            required_params = create_workload_ruleset["merge"]["required_params"]
+            error_msg = f"If using --merge, the following params are required: {required_params}"
+            arg_parser.error(error_msg)
+    else:
+        # If not using merge to merge workloads
+        logger.info(create_workload_ruleset["default"]["invalid_params_found"])
+        if any(create_workload_ruleset["default"]["invalid_params_found"]):
+            invalid_params = create_workload_ruleset["default"]["invalid_params"]
+            error_msg = f"{invalid_params} can only be set if --merge flag is set."
+            arg_parser.error(error_msg)
+        if not all(create_workload_ruleset["default"]["required_params_found"]):
+            logger.info(create_workload_ruleset["default"]["required_params_found"])
+            required_params = create_workload_ruleset["default"]["required_params"]
+            error_msg = f"Ensure all required params are set: {required_params}"
+            arg_parser.error(error_msg)
+
+
 def print_test_execution_id(args):
     console.info(f"[Test Execution ID]: {args.test_execution_id}")
 
@@ -1049,8 +1103,17 @@ def dispatch_sub_command(arg_parser, args, cfg):
             cfg.add(config.Scope.applicationOverride, "generator", "output.path", args.output_path)
             cfg.add(config.Scope.applicationOverride, "workload", "workload.name", args.workload)
             cfg.add(config.Scope.applicationOverride, "workload", "custom_queries", args.custom_queries)
-            configure_connection_params(arg_parser, args, cfg)
+            cfg.add(config.Scope.applicationOverride, "generator", "sample_frequency", args.sample_frequency)
+            cfg.add(config.Scope.applicationOverride, "workload", "merge", args.merge)
+            cfg.add(config.Scope.applicationOverride, "workload", "merge_workloads", args.merge_workloads)
+            cfg.add(config.Scope.applicationOverride, "workload", "merge_name", args.merge_name)
 
+            validate_create_workload_params(arg_parser, args)
+
+            configure_connection_params(arg_parser, args, cfg)
+            print("SLEEPING")
+            import time
+            time.sleep(30)
             workload_generator.create_workload(cfg)
         elif sub_command == "info":
             configure_workload_params(arg_parser, args, cfg)
