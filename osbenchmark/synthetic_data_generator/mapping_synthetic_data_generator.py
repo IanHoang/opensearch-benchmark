@@ -20,6 +20,7 @@ from mimesis.providers.base import BaseProvider
 from tqdm import tqdm
 
 from osbenchmark.utils import console
+import osbenchmark.exceptions
 from osbenchmark.synthetic_data_generator.types import DEFAULT_MAX_FILE_SIZE_GB, DEFAULT_CHUNK_SIZE, SyntheticDataGeneratorConfig
 from osbenchmark.synthetic_data_generator.helpers import get_generation_settings
 
@@ -31,6 +32,7 @@ def write_chunk(data, file_path):
 
 class MappingSyntheticDataGenerator:
     def __init__(self, mapping_config=None):
+        self.logger = logging.getLogger(__name__)
         self.mapping_config = mapping_config or {}
         # self.locale = self.mapping_config.get('mimesis_locale', 'DEFAULT')
         seed = 1
@@ -148,60 +150,74 @@ class MappingSyntheticDataGenerator:
         # Will be replaced by a list of nested objects
         return []
 
-    def transform_mapping_to_generators(self, mapping_dict: Dict[str, Any]) -> Dict[str, Callable[[], Any]]:
+    def transform_mapping_to_generators(self, mapping_dict: Dict[str, Any], field_path_prefix="") -> Dict[str, Callable[[], Any]]:
         """
-        Transform an OpenSearch mapping into a dictionary of generator functions.
-        Supports config-based overrides and type-based defaults.
+        Transforms an OpenSearch mapping into a dictionary of field names mapped to generator functions.
 
         Args:
-            mapping_dict: The OpenSearch mapping.
-            config_dict: The optional config dict loaded from YAML.
+            mapping_dict: OpenSearch mapping provided by user
+            config_dict: custom config in yaml format
 
         Returns:
-            A dictionary mapping field names to generator functions.
+            dictionary of field names mapped to generator functions
         """
-        generator_dict = {}
+        # Initialize transformed_mappings
+        transformed_mapping = {}
 
-        # Extract default generators and overrides from config
-        # TODO: Update this to be within the mapping config already? or just use the self.mapping_config and ensure that it is alreaday pointing to contents of MappingSyntheticDataGenerator
+        # Extract configuration settings (both default generators and field overrides) from config user provided
+        # TODO: Should self.mapping_config already point to MappingSyntheticDataGenerator?
         config = self.mapping_config.get("MappingSyntheticDataGenerator", {}) if self.mapping_config else {}
         default_generators = config.get("default_generators", {})
         overrides = config.get("overrides", {})
+
+        # print("Transform Mappings")
+        # print(config)
+        # print(default_generators)
+        # print(overrides)
 
         if "mappings" in mapping_dict:
             properties = mapping_dict["mappings"].get("properties", {})
         else:
             properties = mapping_dict.get("properties", mapping_dict)
 
+        # Iterate through all the properties in the index mapping
         for field_name, field_def in properties.items():
+            print("generator dict: ", transformed_mapping)
             field_type = field_def.get("type")
+            current_field_path = f"{field_path_prefix}.{field_name}" if field_path_prefix else field_name
 
-            # Handle special cases like object and nested
+            # Special cases like object or nested
             if field_type in {"object", "nested"} and "properties" in field_def:
-                nested_generator = self.transform_mapping_to_generators(field_def)
+                nested_generator = self.transform_mapping_to_generators(mapping_dict=field_def, field_path_prefix=current_field_path)
                 if field_type == "object":
-                    generator_dict[field_name] = lambda f=field_def, ng=nested_generator: self._generate_obj(f, ng)
+                    print("Field Name: ", field_name)
+                    transformed_mapping[field_name] = lambda f=field_def, ng=nested_generator: self._generate_obj(f, ng)
                 else:  # nested
-                    generator_dict[field_name] = lambda f=field_def, ng=nested_generator: self._generate_nested_array(f, ng)
+                    print("Field Name: ", field_name)
+                    transformed_mapping[field_name] = lambda f=field_def, ng=nested_generator: self._generate_nested_array(f, ng)
                 continue
 
-            # Does not handle nested field overrides yet.
-            if field_name in overrides:
-                override = overrides[field_name]
+            if current_field_path in overrides:
+                print(current_field_path)
+                override = overrides[current_field_path]
                 gen_name = override.get("generator")
                 gen_func = getattr(self, gen_name, None)
                 if gen_func:
                     params = override.get("params", {})
-                    generator_dict[field_name] = lambda f=field_def, gen=gen_func, p=params: gen(f, **p)
-                    continue
+                    transformed_mapping[field_name] = lambda f=field_def, gen=gen_func, p=params: gen(f, **p)
+                else:
+                    self.logger.info("Config file override for path [%s] specifies non-existent data generator [%s]", current_field_path, gen_name)
+                    msg = f"Config file override for path [{current_field_path}] specifies non-existent data generator [{gen_name}]"
+                    raise osbenchmark.exceptions.ConfigError(msg)
+            else:
+                # Check if default_generators has overrides for all instances of a type of generator
+                default_params = default_generators.get(field_type, {})
+                generator_func = self.type_generators.get(field_type, lambda f, **_: "unknown_type")
 
-            # Use default generator config for this field type (if any)
-            default_params = default_generators.get(field_type, {})
-            generator_func = self.type_generators.get(field_type, lambda f, **_: "unknown_type")
+                transformed_mapping[field_name] = lambda f=field_def, gen=generator_func, p=default_params: gen(f, **p)
 
-            generator_dict[field_name] = lambda f=field_def, gen=generator_func, p=default_params: gen(f, **p)
 
-        return generator_dict
+        return transformed_mapping
 
 
     def _generate_obj(self, field_def: Dict[str, Any], nested_generators: Dict[str, Callable]) -> Dict[str, Any]:
@@ -222,18 +238,18 @@ class MappingSyntheticDataGenerator:
             result.append(obj)
         return result
 
-    def generate_fake_document(self, generator_dict: Dict[str, Callable]) -> Dict[str, Any]:
+    def generate_fake_document(self, transformed_mapping: Dict[str, Callable]) -> Dict[str, Any]:
         """
         Generate a document using the generator functions
 
         Args:
-            generator_dict: Dictionary of generator functions
+            transformed_mapping: Dictionary of generator functions
 
         Returns:
             document containing lambdas that cna be invoked to generate data
         """
         document = {}
-        for field_name, generator in generator_dict.items():
+        for field_name, generator in transformed_mapping.items():
             document[field_name] = generator()
 
         return document
@@ -318,7 +334,7 @@ def generate_test_document(index_mappings: dict, mapping_config: dict) -> dict:
     mapping_generator = MappingSyntheticDataGenerator(mapping_config)
     converted_mappings = mapping_generator.transform_mapping_to_generators(index_mappings)
 
-    return mapping_generator.generate_fake_document(generator_dict=converted_mappings)
+    return mapping_generator.generate_fake_document(transformed_mapping=converted_mappings)
 
 
 class MappingSyntheticDataGeneratorWorker:
