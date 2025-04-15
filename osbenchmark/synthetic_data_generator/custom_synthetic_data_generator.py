@@ -175,7 +175,6 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
 
         # Fetch settings and custom module components from config that user provided
         generation_settings = get_generation_settings(user_config)
-        print(generation_settings)
         custom_module_components = user_config.get('CustomSyntheticDataGenerator', {})
 
         try:

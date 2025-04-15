@@ -372,7 +372,6 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
 
         # Fetch settings and input config that user provided
         generation_settings = get_generation_settings(input_config)
-        print(generation_settings)
         mapping_config = input_config
 
         max_file_size_bytes = generation_settings.get('max_file_size_gb') * 1024 * 1024 * 1024
