@@ -159,18 +159,22 @@ def create_arg_parser():
         help="Defines a comma-separated list of tasks not to run. By default all tasks of a test_procedure are run.")
 
     synthetic_data_generator_parser = subparsers.add_parser("generate-data",
-                                                            help="Generate synthetic data based on existing index mappings, template document, or both." )
+                                                            help="Generate synthetic data based on existing index mappings or custom module." +
+                                                            "This data can be ported into OSB workloads or ingested into OpenSearch." )
 
     exclusive_file_inputs = synthetic_data_generator_parser.add_mutually_exclusive_group(required=True)
     exclusive_file_inputs.add_argument(
         "--index-mappings",
         "-i",
-        help="Index mappings to generate data from or validate return types."
+        help="OpenSearch index mappings to generate data from."
     )
     exclusive_file_inputs.add_argument(
         "--custom-module",
         "-m",
-        help="Manual module containing generate_fake_document() definition and can contain classes of custom data providers. This is for users who want granular control over their data generation"
+        help="Custom Python module that defines how to generate documents. " +
+        "It can contain function definitions and even class definitions. " +
+        "This gives users more granular control over how data is generated. " +
+        "This module must contain generate_fake_document() definition."
     )
 
     exclusive_params = synthetic_data_generator_parser.add_mutually_exclusive_group(required=True)
@@ -196,14 +200,14 @@ def create_arg_parser():
         "--custom-config",
         "-c",
         default=None,
-        help="This should be used for when providing custom module"
+        help="Optional config where users can specify overrides for mapping synthetic data generator or values that module should use."
     )
     synthetic_data_generator_parser.add_argument(
         "--test-document",
         "-t",
         default=False,
         action="store_true",
-        help="Generates a single synthetic document and displays it to the console so that users can check if the output and generated values are as intended."
+        help="Generates a single synthetic document and displays it to the console so that users can validate generated values and output."
     )
 
     create_workload_parser = subparsers.add_parser("create-workload", help="Create a OSB workload from existing data")

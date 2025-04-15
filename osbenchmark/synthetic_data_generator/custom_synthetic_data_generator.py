@@ -131,7 +131,8 @@ def generate_test_document(generate_fake_document: callable, custom_lists: dict,
             document = generate_fake_document(providers=providers, **custom_lists)
         except AttributeError as e:
             msg = f"Encountered AttributeError when setting up custom_providers and custom_lists. " + \
-                    f"Please ensure you have provided custom_providers and custom_lists in config if using them in module: {e}"
+                  f"It seems that your module might be using custom_lists and custom_providers." + \
+                    f"Please ensure you have provided a custom config with custom_providers and custom_lists: {e}"
             raise ConfigError(msg)
         return document
 

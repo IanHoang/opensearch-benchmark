@@ -8,15 +8,18 @@ from osbenchmark.exceptions import SystemSetupError
 from osbenchmark.synthetic_data_generator.types import DEFAULT_GENERATION_SETTINGS, SyntheticDataGeneratorConfig
 
 def load_config(config_path):
-    allowed_extensions = ['.yml', '.yaml']
+    try:
+        allowed_extensions = ['.yml', '.yaml']
 
-    extension = os.path.splitext(config_path)[1]
-    if extension not in allowed_extensions:
-        raise SystemSetupError(f"User provided config with extension [{extension}]. Config must have a {allowed_extensions} extension.")
+        extension = os.path.splitext(config_path)[1]
+        if extension not in allowed_extensions:
+            raise SystemSetupError(f"User provided config with extension [{extension}]. Config must have a {allowed_extensions} extension.")
 
-    if config_path.endswith(allowed_extensions[0]) or config_path.endswith(allowed_extensions[1]):
-        with open(config_path, 'r') as file:
-            return yaml.safe_load(file)
+        if config_path.endswith(allowed_extensions[0]) or config_path.endswith(allowed_extensions[1]):
+            with open(config_path, 'r') as file:
+                return yaml.safe_load(file)
+    except TypeError as e:
+        raise SystemSetupError("Error when loading config. Please ensure that the proper config was provided")
 
 def write_chunk(data, file_path):
     with open(file_path, 'a') as f:
@@ -30,6 +33,9 @@ def get_generation_settings(input_config: dict) -> dict:
     If there are missing fields in the user's config, it populates it with the default values
     '''
     generation_settings = DEFAULT_GENERATION_SETTINGS
+    if input_config is None:
+        return generation_settings
+
     user_generation_settings = input_config.get('settings', {})
 
     if user_generation_settings == {}:
