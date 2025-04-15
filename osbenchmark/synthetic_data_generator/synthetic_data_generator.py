@@ -50,7 +50,6 @@ def orchestrate_data_generation_for_custom_synthetic_data_generator(cfg, sdg_con
         # Generate all documents
         custom_module = custom_synthetic_data_generator.load_user_module(sdg_config.custom_module_path)
 
-        print("Starting generation")
         total_time_to_generate_dataset, generated_dataset_details = custom_synthetic_data_generator.generate_dataset_with_user_module(dask_client, sdg_config, custom_module, custom_config)
 
         write_record_and_publish_summary_to_console(sdg_config, total_time_to_generate_dataset, generated_dataset_details)
@@ -70,19 +69,9 @@ def orchestrate_data_generation_for_mapping_synthetic_data_generator(cfg, sdg_co
     else:
         raw_mappings, mapping_config = mapping_synthetic_data_generator.load_mapping_and_config(sdg_config.index_mappings_path, sdg_config.custom_config_path)
 
-        docs_written, total_time_to_generate_dataset, dataset_size = mapping_synthetic_data_generator.generate_dataset_with_mappings(dask_client, sdg_config, raw_mappings, mapping_config)
+        total_time_to_generate_dataset, generated_dataset_details = mapping_synthetic_data_generator.generate_dataset_with_mappings(dask_client, sdg_config, raw_mappings, mapping_config)
 
-        record = {"index-name": sdg_config.index_name, "docs_added": docs_written, "dataset_size": dataset_size, "total_time_in_seconds_to_generate_docs_added": total_time_to_generate_dataset}
-        summary = f"Generated {docs_written} docs in {total_time_to_generate_dataset} seconds. Total dataset size is {dataset_size}GB."
-        path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_record.json")
-        with open(path, 'w') as file:
-            json.dump(record, file, indent=2)
-
-        console.println("")
-        console.println(summary)
-        logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
-        console.println(f"Visit the following path to view synthetically generated data: {sdg_config.output_path}")
-
+        write_record_and_publish_summary_to_console(sdg_config, total_time_to_generate_dataset, generated_dataset_details)
 
 def orchestrate_data_generation(cfg):
     logger = logging.getLogger(__name__)

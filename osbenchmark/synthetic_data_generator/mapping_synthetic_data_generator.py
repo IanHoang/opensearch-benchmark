@@ -383,6 +383,7 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
         current_size = 0
         docs_written = 0
         file_counter = 0
+        generated_dataset_details = []
 
         logger.info("Average document size: %s", avg_document_size)
         logger.info("Chunk size: %s docs", chunk_size)
@@ -390,6 +391,7 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
         logger.info("Max file size in GB: %s", generation_settings.get('max_file_size_gb'))
 
         console.println(f"Total GB to generate: {sdg_config.total_size_gb}\n"
+                        f"Average document size: {avg_document_size}\n"
                         f"Max file size in GB: {generation_settings.get('max_file_size_gb')}\n")
 
         start_time = time.time()
@@ -402,6 +404,7 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
             while current_size < total_size_bytes:
                 file_path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_{file_counter}.json")
                 file_size = 0
+                docs_written = 0
 
                 while file_size < max_file_size_bytes:
                     generation_start_time = time.time()
@@ -420,13 +423,30 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
                         current_size += written_size
                         progress_bar.update(written_size)
 
-                    file_size = os.path.getsize(file_path)
                     writing_end_time = time.time()
+
+                    file_size = os.path.getsize(file_path)
+                    # If it exceeds the max file size, then append this to keep track of record
+                    if file_size >= max_file_size_bytes:
+                        file_name = file_path.split("/")[-1]
+                        generated_dataset_details.append({
+                            "file_name": file_name,
+                            "docs": docs_written,
+                            "file_size_bytes": file_size
+                        })
+
                     generating_took_time = writing_start_time - generation_start_time
                     writing_took_time = writing_end_time - writing_start_time
                     logger.info("Generating took [%s] seconds", generating_took_time)
                     logger.info("Writing took [%s] seconds", writing_took_time)
+
                     if current_size >= total_size_bytes:
+                        file_name = file_path.split("/")[-1]
+                        generated_dataset_details.append({
+                            "file_name": file_name,
+                            "docs": docs_written,
+                            "file_size_bytes": file_size
+                        })
                         break
 
                 file_counter += 1
@@ -436,6 +456,6 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
             progress_bar.update(total_size_bytes - progress_bar.n)
 
             dataset_size = current_size
-            logger.info("Generated %s docs in %s seconds. Total dataset size is %s GB", docs_written, total_time_to_generate_dataset, dataset_size)
+            logger.info("Generated dataset in %s seconds. Dataset generation details: %s", total_time_to_generate_dataset, generated_dataset_details)
 
-            return docs_written, total_time_to_generate_dataset, dataset_size
+            return total_time_to_generate_dataset, generated_dataset_details

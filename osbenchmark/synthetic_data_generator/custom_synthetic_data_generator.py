@@ -21,10 +21,10 @@ from mimesis.random import Random
 from tqdm import tqdm
 
 from osbenchmark.utils import console
-from osbenchmark.exceptions import SystemSetupError
+from osbenchmark.exceptions import SystemSetupError, ConfigError
 # from osbenchmark.synthetic_data_generator.input_processor import create_sdg_config_from_args, use_custom_synthetic_data_generator
 from osbenchmark.synthetic_data_generator.types import DEFAULT_MAX_FILE_SIZE_GB, DEFAULT_CHUNK_SIZE
-from osbenchmark.synthetic_data_generator.helpers import write_chunk
+from osbenchmark.synthetic_data_generator.helpers import write_chunk, get_generation_settings
 
 def load_user_module(file_path):
     allowed_extensions = ['.py']
@@ -127,7 +127,12 @@ def generate_test_document(generate_fake_document: callable, custom_lists: dict,
         providers = instantiate_all_providers(custom_providers)
         providers = seed_providers(providers)
 
-        document = generate_fake_document(providers=providers, **custom_lists)
+        try:
+            document = generate_fake_document(providers=providers, **custom_lists)
+        except AttributeError as e:
+            msg = f"Encountered AttributeError when setting up custom_providers and custom_lists. " + \
+                    f"Please ensure you have provided custom_providers and custom_lists in config if using them in module: {e}"
+            raise ConfigError(msg)
         return document
 
 def generate_data_chunk(user_defined_function: callable, chunk_size: int, custom_lists, custom_providers, seed=None):
@@ -169,15 +174,20 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
         logger = logging.getLogger(__name__)
 
         # Fetch settings and custom module components from config that user provided
-        generation_settings = user_config.get('settings', {})
+        generation_settings = get_generation_settings(user_config)
+        print(generation_settings)
         custom_module_components = user_config.get('CustomSyntheticDataGenerator', {})
 
-        custom_lists = custom_module_components.get('custom_lists', {})
-        custom_providers = {name: getattr(user_module, name) for name in custom_module_components.get('custom_providers', [])}
+        try:
+            custom_lists = custom_module_components.get('custom_lists', {})
+            custom_providers = {name: getattr(user_module, name) for name in custom_module_components.get('custom_providers', [])}
+        except TypeError as e:
+            msg = f"Custom config has custom_lists and custom_providers pointing to null values. Either populate or remove."
+            raise ConfigError(msg)
 
-        max_file_size_bytes = generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB) * 1024 * 1024 * 1024
+        max_file_size_bytes = generation_settings.get('max_file_size_gb') * 1024 * 1024 * 1024
         total_size_bytes = sdg_config.total_size_gb * 1024 * 1024 * 1024
-        chunk_size = generation_settings.get('chunk_size', DEFAULT_CHUNK_SIZE)
+        chunk_size = generation_settings.get('chunk_size')
 
         generate_fake_document = user_module.generate_fake_document
         avg_document_size = get_avg_document_size(generate_fake_document, custom_providers, custom_lists)
@@ -191,10 +201,11 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
         logger.info("Average document size: %s", avg_document_size)
         logger.info("Chunk size: %s docs", chunk_size)
         logger.info("Total GB to generate: %s", sdg_config.total_size_gb)
-        logger.info("Max file size in GB: %s", generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB))
+        logger.info("Max file size in GB: %s", generation_settings.get('max_file_size_gb'))
 
         console.println(f"Total GB to generate: {sdg_config.total_size_gb}\n"
-                        f"Max file size in GB: {generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB)}\n")
+                        f"Average document size: {avg_document_size}\n"
+                        f"Max file size in GB: {generation_settings.get('max_file_size_gb')}\n")
 
         start_time = time.time()
         with tqdm(total=total_size_bytes,
