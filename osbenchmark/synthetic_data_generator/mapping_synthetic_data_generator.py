@@ -167,13 +167,13 @@ class MappingSyntheticDataGenerator:
         # Extract configuration settings (both default generators and field overrides) from config user provided
         # TODO: Should self.mapping_config already point to MappingSyntheticDataGenerator?
         config = self.mapping_config.get("MappingSyntheticDataGenerator", {}) if self.mapping_config else {}
-        default_generators = config.get("default_generators", {})
-        overrides = config.get("overrides", {})
+        generator_overrides = config.get("generator_overrides", {})
+        field_overrides = config.get("field_overrides", {})
 
         # print("Transform Mappings")
         # print(config)
-        # print(default_generators)
-        # print(overrides)
+        # print(generator_overrides)
+        # print(field_overrides)
 
         if "mappings" in mapping_dict:
             properties = mapping_dict["mappings"].get("properties", {})
@@ -182,7 +182,7 @@ class MappingSyntheticDataGenerator:
 
         # Iterate through all the properties in the index mapping
         for field_name, field_def in properties.items():
-            print("generator dict: ", transformed_mapping)
+            # print("generator dict: ", transformed_mapping)
             field_type = field_def.get("type")
             current_field_path = f"{field_path_prefix}.{field_name}" if field_path_prefix else field_name
 
@@ -190,28 +190,28 @@ class MappingSyntheticDataGenerator:
             if field_type in {"object", "nested"} and "properties" in field_def:
                 nested_generator = self.transform_mapping_to_generators(mapping_dict=field_def, field_path_prefix=current_field_path)
                 if field_type == "object":
-                    print("Field Name: ", field_name)
+                    # print("Field Name: ", field_name)
                     transformed_mapping[field_name] = lambda f=field_def, ng=nested_generator: self._generate_obj(f, ng)
                 else:  # nested
-                    print("Field Name: ", field_name)
+                    # print("Field Name: ", field_name)
                     transformed_mapping[field_name] = lambda f=field_def, ng=nested_generator: self._generate_nested_array(f, ng)
                 continue
 
-            if current_field_path in overrides:
+            if current_field_path in field_overrides:
                 print(current_field_path)
-                override = overrides[current_field_path]
+                override = field_overrides[current_field_path]
                 gen_name = override.get("generator")
                 gen_func = getattr(self, gen_name, None)
                 if gen_func:
                     params = override.get("params", {})
                     transformed_mapping[field_name] = lambda f=field_def, gen=gen_func, p=params: gen(f, **p)
                 else:
-                    self.logger.info("Config file override for path [%s] specifies non-existent data generator [%s]", current_field_path, gen_name)
-                    msg = f"Config file override for path [{current_field_path}] specifies non-existent data generator [{gen_name}]"
+                    self.logger.info("Config file override for field [%s] specifies non-existent data generator [%s]", current_field_path, gen_name)
+                    msg = f"Config file override for field [{current_field_path}] specifies non-existent data generator [{gen_name}]"
                     raise osbenchmark.exceptions.ConfigError(msg)
             else:
                 # Check if default_generators has overrides for all instances of a type of generator
-                default_params = default_generators.get(field_type, {})
+                default_params = generator_overrides.get(field_type, {})
                 generator_func = self.type_generators.get(field_type, lambda f, **_: "unknown_type")
 
                 transformed_mapping[field_name] = lambda f=field_def, gen=generator_func, p=default_params: gen(f, **p)
