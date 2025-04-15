@@ -24,6 +24,7 @@ from osbenchmark.utils import console
 from osbenchmark.exceptions import SystemSetupError
 # from osbenchmark.synthetic_data_generator.input_processor import create_sdg_config_from_args, use_custom_synthetic_data_generator
 from osbenchmark.synthetic_data_generator.types import DEFAULT_MAX_FILE_SIZE_GB, DEFAULT_CHUNK_SIZE
+from osbenchmark.synthetic_data_generator.helpers import write_chunk
 
 def load_user_module(file_path):
     allowed_extensions = ['.py']
@@ -35,12 +36,6 @@ def load_user_module(file_path):
     user_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(user_module)
     return user_module
-
-def write_chunk(data, file_path):
-    with open(file_path, 'a') as f:
-        for item in data:
-            f.write(json.dumps(item) + '\n')
-    return len(data)
 
 def generate_seeds_for_workers(regenerate=False):
     client = get_client()
