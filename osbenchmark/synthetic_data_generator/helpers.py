@@ -74,6 +74,7 @@ def write_record_and_publish_summary_to_console(sdg_config: SyntheticDataGenerat
     write_record(sdg_config, record)
 
     summary = f"Generated {record['total-docs-written']} docs in {total_time_to_generate_dataset} seconds. Total dataset size is {record['total-dataset-size'] / (1000 ** 3)}GB."
+    console.println("")
     console.println(summary)
 
     logger.info("Visit the following path to view synthetically generated data: [%s]", sdg_config.output_path)
