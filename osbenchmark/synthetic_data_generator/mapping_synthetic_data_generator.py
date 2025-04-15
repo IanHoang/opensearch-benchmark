@@ -85,7 +85,7 @@ class MappingSyntheticDataGenerator:
         else:
             return f"key_{uuid.uuid4().hex[:8]}"
 
-    def generate_long(self, field_def: Dict[str, Any]) -> int:
+    def generate_long(self, field_def: Dict[str, Any], **params) -> int:
         return random.randint(-9223372036854775808, 9223372036854775807)
 
     def generate_integer(self, field_def: Dict[str, Any], **params) -> int:
@@ -94,29 +94,33 @@ class MappingSyntheticDataGenerator:
 
         return random.randint(min, max)
 
-    def generate_short(self, field_def: Dict[str, Any]) -> int:
+    def generate_short(self, field_def: Dict[str, Any], **params) -> int:
         return random.randint(-32768, 32767)
 
-    def generate_byte(self, field_def: Dict[str, Any]) -> int:
+    def generate_byte(self, field_def: Dict[str, Any], **params) -> int:
         return random.randint(-128, 127)
 
-    def generate_double(self, field_def: Dict[str, Any]) -> float:
+    def generate_double(self, field_def: Dict[str, Any], **params) -> float:
         return random.uniform(-1000000, 1000000)
 
     def generate_float(self, field_def: Dict[str, Any], **params) -> float:
         min = params.get('min', 0)
         max = params.get('max', 1000)
-        return random.uniform(-1000, 1000)
+        decimal_places = params.get('round', 2)
 
-    def generate_boolean(self, field_def: Dict[str, Any]) -> bool:
+        float_value = random.uniform(min, max)
+        return round(float_value , decimal_places)
+
+    def generate_boolean(self, field_def: Dict[str, Any], **params) -> bool:
         return random.choice([True, False])
 
-    def generate_date(self, field_def: Dict[str, Any], **params) -> str:
-        # Default to ISO format unless a specific format is defined
+    def generate_date(self, field_def: Dict[str, Any], **params,) -> str:
+        # If field definition includes format, then use it.
         date_format = field_def.get("format", "yyyy-mm-dd")
 
-        # Get a date range (from mapping config or default)
-        format = params.get("format", "yyyy-MM-dd'T'HH:mm:ssZ")
+        # Get a date range (from mapping config or default) from config
+        # If user specified other format then default to config format
+        date_format = params.get("format", date_format)
         start_date = params.get("start_date", "2000-01-01")
         end_date = params.get("end_date", "2030-12-31")
 
@@ -127,26 +131,26 @@ class MappingSyntheticDataGenerator:
         )
 
         # Apply formatting
-        if date_format == "yyyy-MM-dd":
+        if date_format == "yyyy-mm-dd":
             return random_date.strftime("%Y-%m-%d")
-        elif date_format == "yyyy-MM-dd'T'HH:mm:ssZ":
+        elif date_format == "yyyy-mm-dd'T'HH:mm:ssZ":
             return random_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         return random_date.isoformat()  # Default ISO format
 
-    def generate_ip(self, field_def: Dict[str, Any]) -> str:
+    def generate_ip(self, field_def: Dict[str, Any], **params) -> str:
         return f"{random.randint(1, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
 
-    def generate_geo_point(self, field_def: Dict[str, Any]) -> Dict[str, float]:
+    def generate_geo_point(self, field_def: Dict[str, Any], **params) -> Dict[str, float]:
         return {
             "lat": random.uniform(-90, 90),
             "lon": random.uniform(-180, 180)
         }
 
-    def generate_object(self, field_def: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_object(self, field_def: Dict[str, Any], **params) -> Dict[str, Any]:
         # This will be replaced by the nested fields generator
         return {}
 
-    def generate_nested(self, field_def: Dict[str, Any]) -> list:
+    def generate_nested(self, field_def: Dict[str, Any], **params) -> list:
         # Will be replaced by a list of nested objects
         return []
 
