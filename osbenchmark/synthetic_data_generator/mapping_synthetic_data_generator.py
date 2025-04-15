@@ -186,7 +186,10 @@ class MappingSyntheticDataGenerator:
             field_type = field_def.get("type")
             current_field_path = f"{field_path_prefix}.{field_name}" if field_path_prefix else field_name
 
-            # Special cases like object or nested
+            # By default, OpenSearch sees fields with no type and properties field defined as object types
+            if field_type is None and "properties" in field_def:
+                field_type = "object"
+
             if field_type in {"object", "nested"} and "properties" in field_def:
                 nested_generator = self.transform_mapping_to_generators(mapping_dict=field_def, field_path_prefix=current_field_path)
                 if field_type == "object":
