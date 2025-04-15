@@ -417,6 +417,7 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
 
                     # Test if 40GB works by removing seed and just doing for _ in range(workers)
                     # with performance_report(filename="financial_mimesis_10GB.html"):
+                    # TODO: Submit the seeds to the client so that each client is producing different variations of documents
                     futures = [client.submit(MappingSyntheticDataGeneratorWorker.generate_documents_from_worker, index_mappings, mapping_config, chunk_size) for seed in seeds]
                     results = client.gather(futures) # if using AS_COMPLETED remove this line
 
