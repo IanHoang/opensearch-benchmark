@@ -201,7 +201,7 @@ class MappingSyntheticDataGenerator:
                 continue
 
             if current_field_path in field_overrides:
-                print(current_field_path)
+                # print(current_field_path)
                 override = field_overrides[current_field_path]
                 gen_name = override.get("generator")
                 gen_func = getattr(self, gen_name, None)
@@ -214,10 +214,12 @@ class MappingSyntheticDataGenerator:
                     raise osbenchmark.exceptions.ConfigError(msg)
             else:
                 # Check if default_generators has overrides for all instances of a type of generator
-                default_params = generator_overrides.get(field_type, {})
-                generator_func = self.type_generators.get(field_type, lambda f, **_: "unknown_type")
+                generator_override_params = generator_overrides.get(field_type, {})
+                # A dummy lambda must be returned because it runs into TypeError when it's a callable.
+                # Need to maintain interface compatability because all the self.type_generators use fields and **kwargs
+                generator_func = self.type_generators.get(field_type, lambda field, **_: "unknown_type")
 
-                transformed_mapping[field_name] = lambda f=field_def, gen=generator_func, p=default_params: gen(f, **p)
+                transformed_mapping[field_name] = lambda f=field_def, gen=generator_func, p=generator_override_params: gen(f, **p)
 
 
         return transformed_mapping
