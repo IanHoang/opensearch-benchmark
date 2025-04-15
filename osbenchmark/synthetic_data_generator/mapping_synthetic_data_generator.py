@@ -377,7 +377,7 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
 
         max_file_size_bytes = generation_settings.get('max_file_size_gb') * 1024 * 1024 * 1024
         total_size_bytes = sdg_config.total_size_gb * 1024 * 1024 * 1024
-        chunk_size = generation_settings.get('chunk_size')  # Adjust this based on your memory constraints
+        chunk_size = generation_settings.get('chunk_size')
         avg_document_size = get_avg_document_size(index_mappings, mapping_config)
 
         current_size = 0
@@ -403,13 +403,11 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
                 file_path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_{file_counter}.json")
                 file_size = 0
 
-                while file_size < max_file_size_bytes:  # 40GB make this configurable in the benchmark.ini or generation.ini or config.yml
+                while file_size < max_file_size_bytes:
                     generation_start_time = time.time()
                     seeds = generate_seeds_for_workers(regenerate=True)
                     logger.info("Using seeds: %s", seeds)
 
-                    # Test if 40GB works by removing seed and just doing for _ in range(workers)
-                    # with performance_report(filename="financial_mimesis_10GB.html"):
                     # TODO: Submit the seeds to the client so that each client is producing different variations of documents
                     futures = [client.submit(MappingSyntheticDataGeneratorWorker.generate_documents_from_worker, index_mappings, mapping_config, chunk_size) for seed in seeds]
                     results = client.gather(futures) # if using AS_COMPLETED remove this line

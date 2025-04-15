@@ -177,7 +177,7 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
 
         max_file_size_bytes = generation_settings.get('max_file_size_gb', DEFAULT_MAX_FILE_SIZE_GB) * 1024 * 1024 * 1024
         total_size_bytes = sdg_config.total_size_gb * 1024 * 1024 * 1024
-        chunk_size = generation_settings.get('chunk_size', DEFAULT_CHUNK_SIZE)  # Adjust this based on your memory constraints
+        chunk_size = generation_settings.get('chunk_size', DEFAULT_CHUNK_SIZE)
 
         generate_fake_document = user_module.generate_fake_document
         avg_document_size = get_avg_document_size(generate_fake_document, custom_providers, custom_lists)
@@ -208,12 +208,11 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
                 file_size = 0
                 docs_written = 0
 
-                while file_size < max_file_size_bytes:  # 40GB make this configurable in the benchmark.ini or generation.ini or config.yml
+                while file_size < max_file_size_bytes:
                     generation_start_time = time.time()
                     seeds = generate_seeds_for_workers(regenerate=True)
                     logger.info("Using seeds: %s", seeds)
 
-                    # with performance_report(filename="financial_mimesis_10GB.html"):
                     futures = [client.submit(generate_data_chunk, generate_fake_document, chunk_size, custom_lists, custom_providers, seed) for seed in seeds]
                     results = client.gather(futures) # if using AS_COMPLETED remove this line
 
