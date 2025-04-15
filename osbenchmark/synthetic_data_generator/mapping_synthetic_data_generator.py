@@ -115,6 +115,7 @@ class MappingSyntheticDataGenerator:
         return random.choice([True, False])
 
     def generate_date(self, field_def: Dict[str, Any], **params,) -> str:
+        # TODO Need to handle actual format values
         # If field definition includes format, then use it.
         date_format = field_def.get("format", "yyyy-mm-dd")
 
@@ -174,11 +175,6 @@ class MappingSyntheticDataGenerator:
         generator_overrides = config.get("generator_overrides", {})
         field_overrides = config.get("field_overrides", {})
 
-        # print("Transform Mappings")
-        # print(config)
-        # print(generator_overrides)
-        # print(field_overrides)
-
         if "mappings" in mapping_dict:
             properties = mapping_dict["mappings"].get("properties", {})
         else:
@@ -190,7 +186,9 @@ class MappingSyntheticDataGenerator:
             field_type = field_def.get("type")
             current_field_path = f"{field_path_prefix}.{field_name}" if field_path_prefix else field_name
 
-            # By default, OpenSearch sees fields with no type and properties field defined as object types
+            # Fields with no types provided but have properties field are considered type object by default
+            # NOTE: We do not care for multifields. This is more of an ingestion technique where OpenSearch ingests the same field in different ways.
+            # It does not change the data generated.
             if field_type is None and "properties" in field_def:
                 field_type = "object"
 
