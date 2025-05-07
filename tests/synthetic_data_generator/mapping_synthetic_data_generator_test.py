@@ -62,4 +62,131 @@ class TestMappingSyntheticDataGenerator:
         assert mapping_synthetic_data_generator is not None
         assert hasattr(mapping_synthetic_data_generator, 'type_generators')
         assert isinstance(mapping_synthetic_data_generator.type_generators, dict)
+
+    def test_generate_text(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "text"}
+
+        text = mapping_synthetic_data_generator.generate_text(field_definition)
+
+        assert isinstance(text, str)
+        assert "Sample text for" in text
+
+        # Test other params like must_include
+        text_with_must_include = mapping_synthetic_data_generator.generate_text(field_definition, must_include=["vincent_van_gogh"])
+        assert isinstance(text_with_must_include, str)
+        assert "vincent_van_gogh" in text_with_must_include
+
+        # Test analyzer keyword
+        field_definition_with_keyword_analyzer = {"type": "text", "analyzer": "keyword"}
+        text_with_keyword_analyzer = mapping_synthetic_data_generator.generate_text(field_definition_with_keyword_analyzer)
+        assert isinstance(text_with_keyword_analyzer, str)
+        assert "keyword_" in text_with_keyword_analyzer
+
+    def test_generate_keyword(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "keyword"}
+
+        # Test basic
+        keyword = mapping_synthetic_data_generator.generate_keyword(field_definition)
+        assert isinstance(keyword, str)
+        assert "key_" in keyword
+
+        # Test with choices
+        artist_choices = ["vincent_van_gogh", "rembrandt", "monet"]
+        keyword = mapping_synthetic_data_generator.generate_keyword(field_definition, choices=artist_choices)
+        assert isinstance(keyword, str)
+        assert keyword in artist_choices
+
+    def test_generate_long(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "long"}
+
+        # Test basic
+        long = mapping_synthetic_data_generator.generate_long(field_definition)
+        assert isinstance(long, int)
+
+    def test_generate_integer(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "integer"}
+
+        # Test basic
+        integer = mapping_synthetic_data_generator.generate_integer(field_definition)
+        assert isinstance(integer, int)
+
+        # Test with min and max
+        integer_with_min_and_max = mapping_synthetic_data_generator.generate_integer(field_definition, min=1, max=10)
+        assert isinstance(integer_with_min_and_max, int)
+        assert integer_with_min_and_max <= 10 and integer_with_min_and_max >= 1
+        
+    def test_generate_short(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "short"}
+
+        # Test basic
+        short = mapping_synthetic_data_generator.generate_short(field_definition)
+        assert isinstance(short, int)
+
+    def test_generate_byte(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "byte"}
+
+        # Test basic
+        keyword = mapping_synthetic_data_generator.generate_byte(field_definition)
+        assert isinstance(keyword, str)
+        assert "key_" in keyword
+
+    def test_generate_double(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "double"}
+
+        # Test basic
+        keyword = mapping_synthetic_data_generator.generate_double(field_definition)
+        assert isinstance(keyword, int)
+
+    def test_generate_float(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "float"}
+
+        # Test basic
+        float_result = mapping_synthetic_data_generator.generate_float(field_definition)
+        assert isinstance(float_result, float)
+
+        # Test with choices
+        float_result = mapping_synthetic_data_generator.generate_float(field_definition, min=1, max=10)
+        assert isinstance(float_result, float)
+        assert float_result <= 10 and float_result >= 1
+
+    def test_generate_boolean(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "boolean"}
+
+        # Test basic
+        boolean = mapping_synthetic_data_generator.generate_boolean(field_definition)
+        assert isinstance(boolean, bool)
+
+    def test_generate_date(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "date"}
+
+        # Test basic
+        date = mapping_synthetic_data_generator.generate_keyword(field_definition)
+        assert isinstance(date, str)
+
+        # Test with start date and end date
+        date_format = "yyyy-mm-dd"
+        start_date = "2010-01-01"
+        end_date = "2020-01-01"
+
+        keyword = mapping_synthetic_data_generator.generate_keyword(field_definition, date_format=date_format, start_date=start_date, end_date=end_date)
+        assert isinstance(keyword, str)
+
+    def test_generate_ip(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "ip"}
+
+        # Test basic
+        ip = mapping_synthetic_data_generator.generate_ip(field_definition)
+        assert isinstance(ip, str)
+        assert len(ip.split(".")) == 4
+
+        # Test with choices
+        artist_choices = ["vincent_van_gogh", "rembrandt", "monet"]
+        keyword = mapping_synthetic_data_generator.generate_keyword(field_definition, choices=artist_choices)
+        assert isinstance(keyword, str)
+        assert keyword in artist_choices
+
+
+
+
     
+

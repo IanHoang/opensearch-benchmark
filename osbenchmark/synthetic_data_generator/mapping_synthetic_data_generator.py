@@ -58,6 +58,7 @@ class MappingSyntheticDataGenerator:
         choices = params.get('must_include', None)
         analyzer = field_def.get("analyzer", "standard")
 
+        #TODO: Need to support other analyzers
         text = ""
         if choices:
             term = random.choice(choices)
