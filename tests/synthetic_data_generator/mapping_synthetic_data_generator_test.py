@@ -1,5 +1,6 @@
 from unittest.mock import patch, MagicMock, mock_open
 import pytest
+from datetime import datetime
 
 from osbenchmark.synthetic_data_generator.mapping_synthetic_data_generator import MappingSyntheticDataGenerator
 
@@ -42,7 +43,7 @@ class TestMappingSyntheticDataGenerator:
                 }
             }
         }
-    
+
     @pytest.fixture
     def sample_mapping_synthetic_data_generator_config(self):
         return {
@@ -57,7 +58,7 @@ class TestMappingSyntheticDataGenerator:
     @pytest.fixture
     def mapping_synthetic_data_generator(self):
         return MappingSyntheticDataGenerator()
-    
+
     def test_that_mapping_synthetic_data_generator_intializes_correctly(self, mapping_synthetic_data_generator):
         assert mapping_synthetic_data_generator is not None
         assert hasattr(mapping_synthetic_data_generator, 'type_generators')
@@ -99,7 +100,6 @@ class TestMappingSyntheticDataGenerator:
     def test_generate_long(self, mapping_synthetic_data_generator):
         field_definition = {"type": "long"}
 
-        # Test basic
         long = mapping_synthetic_data_generator.generate_long(field_definition)
         assert isinstance(long, int)
 
@@ -114,28 +114,24 @@ class TestMappingSyntheticDataGenerator:
         integer_with_min_and_max = mapping_synthetic_data_generator.generate_integer(field_definition, min=1, max=10)
         assert isinstance(integer_with_min_and_max, int)
         assert integer_with_min_and_max <= 10 and integer_with_min_and_max >= 1
-        
+
     def test_generate_short(self, mapping_synthetic_data_generator):
         field_definition = {"type": "short"}
 
-        # Test basic
         short = mapping_synthetic_data_generator.generate_short(field_definition)
         assert isinstance(short, int)
 
     def test_generate_byte(self, mapping_synthetic_data_generator):
         field_definition = {"type": "byte"}
 
-        # Test basic
-        keyword = mapping_synthetic_data_generator.generate_byte(field_definition)
-        assert isinstance(keyword, str)
-        assert "key_" in keyword
+        byte = mapping_synthetic_data_generator.generate_byte(field_definition)
+        assert isinstance(byte, int)
 
     def test_generate_double(self, mapping_synthetic_data_generator):
         field_definition = {"type": "double"}
 
-        # Test basic
-        keyword = mapping_synthetic_data_generator.generate_double(field_definition)
-        assert isinstance(keyword, int)
+        double = mapping_synthetic_data_generator.generate_double(field_definition)
+        assert isinstance(double, float)
 
     def test_generate_float(self, mapping_synthetic_data_generator):
         field_definition = {"type": "float"}
@@ -152,7 +148,6 @@ class TestMappingSyntheticDataGenerator:
     def test_generate_boolean(self, mapping_synthetic_data_generator):
         field_definition = {"type": "boolean"}
 
-        # Test basic
         boolean = mapping_synthetic_data_generator.generate_boolean(field_definition)
         assert isinstance(boolean, bool)
 
@@ -160,7 +155,7 @@ class TestMappingSyntheticDataGenerator:
         field_definition = {"type": "date"}
 
         # Test basic
-        date = mapping_synthetic_data_generator.generate_keyword(field_definition)
+        date = mapping_synthetic_data_generator.generate_date(field_definition)
         assert isinstance(date, str)
 
         # Test with start date and end date
@@ -168,25 +163,29 @@ class TestMappingSyntheticDataGenerator:
         start_date = "2010-01-01"
         end_date = "2020-01-01"
 
-        keyword = mapping_synthetic_data_generator.generate_keyword(field_definition, date_format=date_format, start_date=start_date, end_date=end_date)
-        assert isinstance(keyword, str)
+        date = mapping_synthetic_data_generator.generate_date(field_definition, date_format=date_format, start_date=start_date, end_date=end_date)
+
+        start_date_formatted = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_date_formatted = datetime.strptime(end_date, "%Y-%m-%d").date()
+        generated_date_formatted = datetime.strptime(date, "%Y-%m-%d").date()
+
+        assert isinstance(date, str)
+        assert start_date_formatted <= generated_date_formatted <= end_date_formatted
 
     def test_generate_ip(self, mapping_synthetic_data_generator):
         field_definition = {"type": "ip"}
 
-        # Test basic
         ip = mapping_synthetic_data_generator.generate_ip(field_definition)
         assert isinstance(ip, str)
         assert len(ip.split(".")) == 4
 
-        # Test with choices
-        artist_choices = ["vincent_van_gogh", "rembrandt", "monet"]
-        keyword = mapping_synthetic_data_generator.generate_keyword(field_definition, choices=artist_choices)
-        assert isinstance(keyword, str)
-        assert keyword in artist_choices
+    def test_generate_geo_point(self, mapping_synthetic_data_generator):
+        field_definition = {"type": "geo_point"}
+
+        geo_point = mapping_synthetic_data_generator.generate_geo_point(field_definition)
+        assert isinstance(geo_point, dict)
 
 
 
 
-    
 
