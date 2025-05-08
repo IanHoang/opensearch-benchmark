@@ -7,7 +7,7 @@ from osbenchmark.synthetic_data_generator.mapping_synthetic_data_generator impor
 class TestMappingSyntheticDataGenerator:
 
     @pytest.fixture
-    def sample_basic_opensearch_mapping(self):
+    def sample_mapping(self):
         return {
             "mappings": {
                 "properties": {
@@ -39,18 +39,57 @@ class TestMappingSyntheticDataGenerator:
                     },
                     "tags": {
                         "type": "keyword"
+                    },
+                    "author_profile": {
+                        "type": "object",
+                        "properties": {
+                            "bio": {"type": "text"},
+                            "email": {"type": "keyword"}
+                        }
+                    },
+                    "other_works": {
+                        "type": "nested",
+                        "properties": {
+                            "title": {"type": "text"}
+                        }
                     }
                 }
             }
         }
 
     @pytest.fixture
-    def sample_mapping_synthetic_data_generator_config(self):
+    def sample_config(self):
         return {
             "MappingSyntheticDataGenerator": {
                 "generator_overrides": {
                     "integer": {"min": 1, "max": 100},
                     "float": {"min": 0, "max": 10, "round": 1}
+                },
+                "field_overrides": {
+                    "title": {
+                        "generator": "generate_text",
+                        "params": {
+                            "must_include": ["Mark S"]
+                        }
+                    },
+                    "tags": {
+                        "generator": "generate_keyword",
+                        "params": {
+                            "choices": ["monet"]
+                        }
+                    },
+                    "other_works.title": {
+                        "generator": "generate_text",
+                        "params": {
+                            "must_include": ["Mark S"]
+                        }
+                    },
+                    "author_profile.email": {
+                        "generator": "generate_keyword",
+                        "params": {
+                            "choices": ["marktwain@gmail.com"]
+                        }
+                    }
                 }
             }
         }
@@ -184,8 +223,50 @@ class TestMappingSyntheticDataGenerator:
 
         geo_point = mapping_synthetic_data_generator.generate_geo_point(field_definition)
         assert isinstance(geo_point, dict)
+        assert -90 <= geo_point["lat"] <= 90
+        assert -180 <= geo_point["lon"] <= 180
 
+    def test_transform_mapping_to_generators(self, mapping_synthetic_data_generator, sample_mapping):
+        transformed_mapping = mapping_synthetic_data_generator.transform_mapping_to_generators(sample_mapping)
 
+        assert "title" in transformed_mapping
+        assert "description" in transformed_mapping
+        assert "price" in transformed_mapping
+        assert "created_at" in transformed_mapping
+        assert "is_available" in transformed_mapping
+        assert "category_id" in transformed_mapping
+        assert "tags" in transformed_mapping
 
+        assert callable(transformed_mapping["title"])
+        assert callable(transformed_mapping["description"])
+        assert callable(transformed_mapping["price"])
+        assert callable(transformed_mapping["created_at"])
+        assert callable(transformed_mapping["is_available"])
+        assert callable(transformed_mapping["category_id"])
+        assert callable(transformed_mapping["tags"])
+
+    def test_transform_mapping_to_generators_with_config(self, sample_mapping, sample_config):
+        mapping_synthetic_data_generator = MappingSyntheticDataGenerator(sample_config)
+        print(mapping_synthetic_data_generator)
+        transformed_mapping = mapping_synthetic_data_generator.transform_mapping_to_generators(sample_mapping)
+
+        # Type overrides
+        price_value = transformed_mapping["price"]()
+        assert 1 <= price_value <= 10
+
+        # Field overrides
+        tags_value = transformed_mapping["tags"]()
+        title_value = transformed_mapping["title"]()
+
+        assert "monet" in tags_value
+        assert "Mark S" in title_value
+
+        # Nested field overrides
+        other_works = transformed_mapping["other_works"]()
+        for work in other_works:
+            assert "Mark S" in work["title"]
+
+        author_profile = transformed_mapping["author_profile"]()
+        assert "marktwain@gmail.com" == author_profile["email"]
 
 

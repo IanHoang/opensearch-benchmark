@@ -59,7 +59,7 @@ def orchestrate_data_generation_for_mapping_synthetic_data_generator(cfg, sdg_co
     logger.info("Generating data with mapping synthetic data generator")
 
     if cfg.opts("synthetic_data_generator", "test_document"):
-        # TODO Remove config from this meethod and just load it in the beginning
+        # TODO Remove config from this method and just load it in the beginning
         raw_mappings, mapping_config = mapping_synthetic_data_generator.load_mapping_and_config(sdg_config.index_mappings_path, sdg_config.custom_config_path)
         document = mapping_synthetic_data_generator.generate_test_document(raw_mappings, mapping_config)
 

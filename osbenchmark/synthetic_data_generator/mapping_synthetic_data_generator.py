@@ -364,7 +364,7 @@ def generate_dataset_with_mappings(client: Client, sdg_config: SyntheticDataGene
         param: client: Dask client that performs multiprocessing and creates dashboard to visualize task streams
         param: sdg_config: SyntheticDataGenerationConfig instance that houses information related to data corpora to generate
         param: index_mappings: OpenSearch index mappings that user provided
-        param: user_config: Optional config that specifies custom lists and custom data providers that the custom module uses to generate data.
+        param: input_config: Optional config that specifies custom lists and custom data providers that the custom module uses to generate data.
             This also contains configuration details related to how data is generated (i.e. number of workers to use, max file size in GB, and number of documents in a chunk)
 
         returns: Does not return results but writes documents to output path
