@@ -2,7 +2,8 @@ from unittest.mock import patch, MagicMock, mock_open
 import pytest
 from datetime import datetime
 
-from osbenchmark.synthetic_data_generator.mapping_synthetic_data_generator import MappingSyntheticDataGenerator
+from osbenchmark.synthetic_data_generator.mapping_synthetic_data_generator import MappingSyntheticDataGenerator, MappingSyntheticDataGeneratorWorker
+from osbenchmark.exceptions import ConfigError
 
 class TestMappingSyntheticDataGenerator:
 
@@ -317,3 +318,83 @@ class TestMappingSyntheticDataGenerator:
         if fake_document["other_works"]:
             first_work = fake_document["other_works"][0]
             assert "title" in first_work
+
+    def test_invalid_generator_type(self, sample_mapping):
+        # If a user overrides a field with an invalid field override, mapping SDG should throw an error
+        invalid_config = {
+            "MappingSyntheticDataGenerator": {
+                "generator_overrides": {
+                    "integer": {"min": 1, "max": 100},
+                    "float": {"min": 0, "max": 10, "round": 1}
+                },
+                "field_overrides": {
+                    "title": {
+                        "generator": "generate_invalid_type",
+                        "params": {
+                            "must_include": ["Mark S"]
+                        }
+                    }
+                }
+            }
+        }
+
+        mapping_synthetic_data_generator = MappingSyntheticDataGenerator(invalid_config)
+
+        with pytest.raises(ConfigError):
+            mapping_synthetic_data_generator.transform_mapping_to_generators(sample_mapping)
+
+class TestMappingSyntheticDataGeneratorWorker:
+
+    @pytest.fixture
+    def sample_mapping(self):
+        return {
+            "mappings": {
+                "properties": {
+                    "title": {
+                        "type": "text",
+                        "analyzer": "standard",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "category_id": {
+                        "type": "integer"
+                    }
+                }
+            }
+        }
+
+    @pytest.fixture
+    def sample_config(self):
+        return {
+            "MappingSyntheticDataGenerator": {
+                "generator_overrides": {
+                    "integer": {"min": 1, "max": 10}
+                }
+            }
+        }
+
+    def test_generate_documents_from_workers(self, sample_mapping, sample_config):
+        chunk_size = 5
+        documents = MappingSyntheticDataGeneratorWorker.generate_documents_from_worker(
+            index_mappings=sample_mapping,
+            mapping_config=sample_config,
+            chunk_size=chunk_size
+        )
+
+        assert isinstance(documents, list)
+        assert len(documents) == 5
+
+        for document in documents:
+            assert isinstance(document, dict)
+            assert "title" in document
+            assert isinstance(document["title"], str)
+            assert "category_id" in document
+            assert isinstance(document["category_id"], int)
+
+            assert 1 <= document["category_id"] <= 10
+
+
