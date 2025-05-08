@@ -218,6 +218,29 @@ class TestMappingSyntheticDataGenerator:
         assert isinstance(ip, str)
         assert len(ip.split(".")) == 4
 
+    def test_generate_object(self, mapping_synthetic_data_generator):
+        nested_generators = {
+            "author": lambda: "Mark Twain",
+            "text": lambda: "What's for dinner kids?"
+        }
+        generated_object = mapping_synthetic_data_generator._generate_obj({}, nested_generators)
+
+        assert isinstance(generated_object, dict)
+        assert generated_object["author"] == "Mark Twain"
+        assert generated_object["text"] == "What's for dinner kids?"
+
+    def test_generate_nested_array(self, mapping_synthetic_data_generator):
+        nested_generators = {
+            "author": lambda: "Mark Twain",
+            "text": lambda: "What's for dinner kids?"
+        }
+        nested_array = mapping_synthetic_data_generator._generate_nested_array({}, nested_generators, min_items=5, max_items=5)
+
+        assert isinstance(nested_array, list)
+        assert len(nested_array) == 5
+        assert nested_array[0]["author"] == "Mark Twain"
+        assert nested_array[0]["text"] == "What's for dinner kids?"
+
     def test_generate_geo_point(self, mapping_synthetic_data_generator):
         field_definition = {"type": "geo_point"}
 
@@ -236,6 +259,8 @@ class TestMappingSyntheticDataGenerator:
         assert "is_available" in transformed_mapping
         assert "category_id" in transformed_mapping
         assert "tags" in transformed_mapping
+        assert "author_profile" in transformed_mapping
+        assert "other_works" in transformed_mapping
 
         assert callable(transformed_mapping["title"])
         assert callable(transformed_mapping["description"])
@@ -244,10 +269,11 @@ class TestMappingSyntheticDataGenerator:
         assert callable(transformed_mapping["is_available"])
         assert callable(transformed_mapping["category_id"])
         assert callable(transformed_mapping["tags"])
+        assert callable(transformed_mapping["author_profile"])
+        assert callable(transformed_mapping["other_works"])
 
     def test_transform_mapping_to_generators_with_config(self, sample_mapping, sample_config):
         mapping_synthetic_data_generator = MappingSyntheticDataGenerator(sample_config)
-        print(mapping_synthetic_data_generator)
         transformed_mapping = mapping_synthetic_data_generator.transform_mapping_to_generators(sample_mapping)
 
         # Type overrides
@@ -269,4 +295,25 @@ class TestMappingSyntheticDataGenerator:
         author_profile = transformed_mapping["author_profile"]()
         assert "marktwain@gmail.com" == author_profile["email"]
 
+    def test_generate_fake_document(self, mapping_synthetic_data_generator, sample_mapping):
+        transformed_mapping = mapping_synthetic_data_generator.transform_mapping_to_generators(sample_mapping)
+        fake_document = mapping_synthetic_data_generator.generate_fake_document(transformed_mapping)
 
+        assert isinstance(fake_document, dict)
+        assert "title" in fake_document
+        assert "description" in fake_document
+        assert "price" in fake_document
+        assert "created_at" in fake_document
+        assert "is_available" in fake_document
+        assert "category_id" in fake_document
+        assert "tags" in fake_document
+        assert "author_profile" in fake_document
+        assert "other_works" in fake_document
+
+        if fake_document["author_profile"]:
+            assert "bio" in fake_document["author_profile"]
+            assert "email" in fake_document["author_profile"]
+
+        if fake_document["other_works"]:
+            first_work = fake_document["other_works"][0]
+            assert "title" in first_work
