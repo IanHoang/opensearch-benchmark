@@ -75,4 +75,4 @@ MappingSyntheticDataGenerator:
     favorite_locations.name:
       generator: generate_keyword
       params:
-        choices: ["Austin", "NYC", "Miami"]
+        choices: ["Austin", "NYC", "Amsterdam"]
