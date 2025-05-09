@@ -38,6 +38,7 @@ def load_user_module(file_path):
     return user_module
 
 def generate_seeds_for_workers(regenerate=False):
+    # This adds latency so might consider deprecating this
     client = get_client()
     workers = client.scheduler_info()['workers']
 

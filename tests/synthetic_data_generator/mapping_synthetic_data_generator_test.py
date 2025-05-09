@@ -396,5 +396,3 @@ class TestMappingSyntheticDataGeneratorWorker:
             assert isinstance(document["category_id"], int)
 
             assert 1 <= document["category_id"] <= 10
-
-
