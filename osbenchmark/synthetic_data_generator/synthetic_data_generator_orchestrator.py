@@ -21,51 +21,6 @@ from osbenchmark.synthetic_data_generator.synthetic_data_generator import Synthe
 from osbenchmark.synthetic_data_generator.strategies import CustomModuleStrategy, MappingStrategy
 from osbenchmark.synthetic_data_generator.types import SyntheticDataGeneratorMetadata
 
-# def orchestrate_custom_sdg(test_document_requested, sdg_metadata, sdg_config, dask_client):
-#     logger = logging.getLogger(__name__)
-#     logger.info("Generating data with Custom Strategy")
-
-#     custom_module = helpers.load_user_module(sdg_metadata.custom_module_path) # load it as a callable
-
-#     custom_module_strategy = CustomModuleStrategy(sdg_metadata, sdg_config, custom_module)
-#     sdg = SyntheticDataGenerator(sdg_metadata, sdg_config, dask_client, custom_module_strategy)
-
-#     if test_document_requested:
-#         document = sdg.generate_test_document()
-
-#         console.println("Generating a single test document:")
-#         console.println("Please verify that the output is generated as intended. \n")
-#         print(json.dumps(document, indent=2))
-
-#     else:
-#         # Generate all documents
-#         total_time_to_generate_dataset, generated_dataset_details = sdg.generate_dataset()
-
-#         helpers.write_record_and_publish_summary_to_console(sdg_metadata, total_time_to_generate_dataset, generated_dataset_details)
-
-# def orchestrate_mapping_sdg(test_document_requested: str, sdg_metadata: SyntheticDataGeneratorMetadata, sdg_config, dask_client: Client):
-#     logger = logging.getLogger(__name__)
-#     logger.info("Generating data with Mapping Strategy")
-
-#     raw_mappings = helpers.load_mapping(sdg_metadata.index_mappings_path)
-#     sdg_config = helpers.load_config(sdg_metadata.custom_config_path) # Remove this, it's being passed in
-
-#     mapping_strategy = MappingStrategy(sdg_metadata, sdg_config, raw_mappings)
-#     sdg = SyntheticDataGenerator(sdg_metadata, sdg_config, dask_client, mapping_strategy)
-
-#     if test_document_requested:
-#         # TODO Remove config from this method and just load it in the beginning
-#         document = sdg.generate_test_document()
-
-#         console.println("Generating a single test document:")
-#         console.println("Please verify that the output is generated as intended. \n")
-#         print(json.dumps(document, indent=2))
-#     else:
-#         # Generate all documents
-#         total_time_to_generate_dataset, generated_dataset_details = sdg.generate_dataset()
-
-#         helpers.write_record_and_publish_summary_to_console(sdg_metadata, total_time_to_generate_dataset, generated_dataset_details)
-
 def orchestrate_data_generation(cfg):
     logger = logging.getLogger(__name__)
     sdg_metadata = create_sdg_metadata_from_args(cfg)

@@ -10,11 +10,11 @@ from datetime import datetime
 
 import pytest
 
-from osbenchmark.synthetic_data_generator.mapping_synthetic_data_generator import MappingSyntheticDataGenerator, MappingSyntheticDataGeneratorWorker
+from osbenchmark.synthetic_data_generator.mapping_synthetic_data_generator import MappingConverter, MappingGenerationLogicWorker
 from osbenchmark.exceptions import ConfigError
 
 # pylint: disable=R0904
-class TestMappingSyntheticDataGenerator:
+class TestMappingGenerationLogic:
 
     @pytest.fixture
     def sample_mapping(self):
@@ -70,7 +70,7 @@ class TestMappingSyntheticDataGenerator:
     @pytest.fixture
     def sample_config(self):
         return {
-            "MappingSyntheticDataGenerator": {
+            "MappingConverter": {
                 "generator_overrides": {
                     "integer": {"min": 1, "max": 100},
                     "float": {"min": 0, "max": 10, "round": 1}
@@ -106,7 +106,7 @@ class TestMappingSyntheticDataGenerator:
 
     @pytest.fixture
     def mapping_synthetic_data_generator(self):
-        return MappingSyntheticDataGenerator()
+        return MappingConverter()
 
     def test_that_mapping_synthetic_data_generator_intializes_correctly(self, mapping_synthetic_data_generator):
         assert mapping_synthetic_data_generator is not None
@@ -285,7 +285,7 @@ class TestMappingSyntheticDataGenerator:
         assert callable(transformed_mapping["other_works"])
 
     def test_transform_mapping_to_generators_with_config(self, sample_mapping, sample_config):
-        mapping_synthetic_data_generator = MappingSyntheticDataGenerator(sample_config)
+        mapping_synthetic_data_generator = MappingConverter(sample_config)
         transformed_mapping = mapping_synthetic_data_generator.transform_mapping_to_generators(sample_mapping)
 
         # Type overrides
@@ -333,7 +333,7 @@ class TestMappingSyntheticDataGenerator:
     def test_invalid_generator_type(self, sample_mapping):
         # If a user overrides a field with an invalid field override, mapping SDG should throw an error
         invalid_config = {
-            "MappingSyntheticDataGenerator": {
+            "MappingConverter": {
                 "generator_overrides": {
                     "integer": {"min": 1, "max": 100},
                     "float": {"min": 0, "max": 10, "round": 1}
@@ -349,12 +349,12 @@ class TestMappingSyntheticDataGenerator:
             }
         }
 
-        mapping_synthetic_data_generator = MappingSyntheticDataGenerator(invalid_config)
+        mapping_synthetic_data_generator = MappingConverter(invalid_config)
 
         with pytest.raises(ConfigError):
             mapping_synthetic_data_generator.transform_mapping_to_generators(sample_mapping)
 
-class TestMappingSyntheticDataGeneratorWorker:
+class TestMappingGenerationLogicWorker:
 
     @pytest.fixture
     def sample_mapping(self):
@@ -381,7 +381,7 @@ class TestMappingSyntheticDataGeneratorWorker:
     @pytest.fixture
     def sample_config(self):
         return {
-            "MappingSyntheticDataGenerator": {
+            "MappingConverter": {
                 "generator_overrides": {
                     "integer": {"min": 1, "max": 10}
                 }
@@ -391,7 +391,7 @@ class TestMappingSyntheticDataGeneratorWorker:
     def test_generate_documents_from_workers(self, sample_mapping, sample_config):
         seed = 1
         docs_per_chunk = 5
-        documents = MappingSyntheticDataGeneratorWorker.generate_documents_from_worker(
+        documents = MappingGenerationLogicWorker.generate_documents_from_worker(
             index_mappings=sample_mapping,
             mapping_config=sample_config,
             docs_per_chunk=docs_per_chunk,
