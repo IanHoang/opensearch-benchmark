@@ -77,6 +77,7 @@ class MappingStrategy(DataGenerationStrategy):
         return MappingConverter.generate_fake_document(transformed_mapping=converted_mappings)
 
     def calculate_avg_doc_size(self):
+        # TODO: Change this to pickle
         output = [self.generate_test_document()]
         write_chunk(output, '/tmp/test-size.json')
 

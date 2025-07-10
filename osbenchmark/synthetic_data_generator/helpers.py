@@ -11,6 +11,7 @@ import logging
 import json
 import shutil
 import importlib.util
+import pickle
 
 import yaml
 
@@ -72,10 +73,12 @@ def load_config(config_path):
         raise SystemSetupError("Error when loading config. Please ensure that the proper config was provided")
 
 def write_chunk(data, file_path):
+    written_bytes = 0
     with open(file_path, 'a') as f:
         for item in data:
             f.write(json.dumps(item) + '\n')
-    return len(data)
+            written_bytes += len(pickle.dumps(item))
+    return len(data), written_bytes
 
 def get_generation_settings(input_config: dict) -> dict:
     '''

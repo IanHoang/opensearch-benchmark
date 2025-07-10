@@ -95,6 +95,7 @@ class CustomModuleStrategy(DataGenerationStrategy):
         return document
 
     def calculate_avg_doc_size(self):
+        # TODO: Change to pickle
         output = [self.generate_test_document()]
         write_chunk(output, '/tmp/test-size.json')
 

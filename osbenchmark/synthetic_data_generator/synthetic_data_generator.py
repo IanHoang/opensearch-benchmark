@@ -104,11 +104,10 @@ class SyntheticDataGenerator:
                     # Generate data across all workers
                     writing_start_time = time.time()
                     for _, data in as_completed(futures, with_results=True):
-                        written = write_chunk(data, file_path)
-                        docs_written += written
-                        written_size = written * avg_document_size
-                        current_size += written_size
-                        progress_bar.update(written_size)
+                        docs_written_from_chunk, written_bytes = write_chunk(data, file_path)
+                        docs_written += docs_written_from_chunk
+                        current_size += written_bytes
+                        progress_bar.update(written_bytes)
                     writing_end_time = time.time()
 
                     generating_took_time = writing_start_time - generation_start_time
