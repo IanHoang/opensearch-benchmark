@@ -11,7 +11,6 @@ import logging
 import time
 import os
 import hashlib
-import importlib.util
 
 from dask.distributed import get_client, as_completed
 from mimesis import Generic
@@ -22,19 +21,9 @@ from tqdm import tqdm
 
 from osbenchmark.utils import console
 from osbenchmark.exceptions import SystemSetupError, ConfigError
+from osbenchmark.synthetic_data_generator.synthetic_data_generator import SyntheticDataGenerator
 from osbenchmark.synthetic_data_generator.types import GB_TO_BYTES
-from osbenchmark.synthetic_data_generator.helpers import write_chunk, get_generation_settings, setup_custom_tqdm_formatting
-
-def load_user_module(file_path):
-    allowed_extensions = ['.py']
-    extension = os.path.splitext(file_path)[1]
-    if extension not in allowed_extensions:
-        raise SystemSetupError(f"User provided module with file extension [{extension}]. Python modules must have {allowed_extensions} extension.")
-
-    spec = importlib.util.spec_from_file_location("user_module", file_path)
-    user_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(user_module)
-    return user_module
+from osbenchmark.synthetic_data_generator.helpers import write_chunk, get_generation_settings, setup_custom_tqdm_formatting, load_user_module
 
 def generate_seeds_for_workers(regenerate=False):
     # This adds latency so might consider deprecating this
@@ -130,7 +119,7 @@ def generate_data_chunk(user_defined_function: callable, docs_per_chunk: int, cu
 
     return [user_defined_function(providers=seeded_providers, **custom_lists) for _ in range(docs_per_chunk)]
 
-def generate_dataset_with_user_module(client, sdg_config, user_module, user_config):
+def generate_dataset_with_user_module(client, sdg_metadata, user_module, sdg_config):
     """
     This is used whenever a user has provided their own custom module to generate fake data with.
     This module must contain a function called generate_fake_document(), which houses the definitions of a single synthetic document. It can also
@@ -145,9 +134,9 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
     but understand that there might be performance limitations
 
     param: client: Dask client that performs multiprocessing and creates dashboard to visualize task streams
-    param: sdg_config: SyntheticDataGenerationConfig instance that houses information related to data corpora to generate
+    param: sdg_metadata: SyntheticDataGenerationConfig instance that houses information related to data corpora to generate
     param: user_module: Python module that user supplies containing logic to generate synthetic documents
-    param: user_config: Optional config that specifies custom lists and custom data providers that the custom module uses to generate data.
+    param: sdg_config: Optional config that specifies custom lists and custom data providers that the custom module uses to generate data.
         This also contains configuration details related to how data is generated (i.e. number of workers to use, max file size in GB, and
         number of documents in a chunk)
 
@@ -156,8 +145,8 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
     logger = logging.getLogger(__name__)
 
     # Fetch settings and custom module components from config that user provided
-    generation_settings = get_generation_settings(user_config)
-    custom_module_components = user_config.get('CustomSyntheticDataGenerator', {})
+    generation_settings = get_generation_settings(sdg_config)
+    custom_module_components = sdg_config.get('CustomSyntheticDataGenerator', {})
 
     try:
         custom_lists = custom_module_components.get('custom_lists', {})
@@ -167,7 +156,7 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
         raise ConfigError(msg)
 
     max_file_size_bytes = generation_settings.get('max_file_size_gb') * GB_TO_BYTES
-    total_size_bytes = sdg_config.total_size_gb * GB_TO_BYTES
+    total_size_bytes = sdg_metadata.total_size_gb * GB_TO_BYTES
     docs_per_chunk = generation_settings.get('docs_per_chunk')
 
     generate_fake_document = user_module.generate_fake_document
@@ -181,10 +170,10 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
 
     logger.info("Average document size in bytes: %s", avg_document_size)
     logger.info("Chunk size: %s docs", docs_per_chunk)
-    logger.info("Total GB to generate: %s", sdg_config.total_size_gb)
+    logger.info("Total GB to generate: %s", sdg_metadata.total_size_gb)
     logger.info("Max file size in GB: %s", generation_settings.get('max_file_size_gb'))
 
-    console.println(f"Total GB to generate: {sdg_config.total_size_gb}\n"
+    console.println(f"Total GB to generate: {sdg_metadata.total_size_gb}\n"
                     f"Average document size in bytes: {avg_document_size}\n"
                     f"Max file size in GB: {generation_settings.get('max_file_size_gb')}\n")
 
@@ -196,7 +185,7 @@ def generate_dataset_with_user_module(client, sdg_config, user_module, user_conf
 
         setup_custom_tqdm_formatting(progress_bar)
         while current_size < total_size_bytes:
-            file_path = os.path.join(sdg_config.output_path, f"{sdg_config.index_name}_{file_counter}.json")
+            file_path = os.path.join(sdg_metadata.output_path, f"{sdg_metadata.index_name}_{file_counter}.json")
             file_size = 0
             docs_written = 0
 
