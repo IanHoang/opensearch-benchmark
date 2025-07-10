@@ -21,7 +21,7 @@ from mimesis.random import Random
 from mimesis.providers.base import BaseProvider
 from tqdm import tqdm
 
-from osbenchmark.exceptions import SystemSetupError, ConfigError
+from osbenchmark.exceptions import ConfigError
 from osbenchmark.synthetic_data_generator.strategies import DataGenerationStrategy
 from osbenchmark.synthetic_data_generator.types import SyntheticDataGeneratorMetadata
 from osbenchmark.synthetic_data_generator.helpers import write_chunk, get_generation_settings, setup_custom_tqdm_formatting
@@ -51,7 +51,11 @@ class CustomModuleStrategy(DataGenerationStrategy):
         self.logger = logging.getLogger(__name__)
 
     def generate_data_chunks_across_workers(self, dask_client: Client, docs_per_chunk: int, seeds: list ) -> list:
-        """ Submits workers to generate data chunks and returns Dask futures"""
+        """
+        Submits workers to generate data chunks and returns Dask futures
+
+        Returns: list of Dask Futures
+        """
         return [dask_client.submit(
             self.generate_data_chunk_from_worker, self.custom_module.generate_fake_document,
             docs_per_chunk, seed) for seed in seeds]
@@ -59,17 +63,18 @@ class CustomModuleStrategy(DataGenerationStrategy):
 
     def generate_data_chunk_from_worker(self, generate_fake_document: Callable, docs_per_chunk: int, seed: Optional[int]) -> list:
         """
-        Synthetic Data Generator Worker that calls a function that generates a single document.
-        The worker will call the function N number of times to generate N docs of data before returning results
+        This method is submitted to Dask worker and can be thought of as the worker performing a job, which is calling the
+        custom module's generate_fake_document() function to generate documents.
+        The worker will call the function N number of times to generate N docs of data before returning results.
 
-        :param custom_logic_function: This is the callable that the user defined in their module.
+        :param generate_fake_document: This is the callable that the user must define in their module.
             The callable should be named 'generate_fake_document()'
         :param docs_per_chunk: The number of documents the worker needs to generate before returning them in a list
-        :param custom_lists (optional): These are custom lists that the user_defined_function uses to generate random values
-        :param custom_providers (optional): These are custom providers (written in Mimesis or Faker) that generate data in a specific way.
+        :instance variable custom_lists (optional): These are custom lists that the user_defined_function uses to generate random values
+        :instance variable custom_providers (optional): These are custom providers (written in Mimesis or Faker) that generate data in a specific way.
             Users define this in the same file as generate_fake_document() function. Custom providers must extend from the BaseProviders class.
 
-        :returns List of documents to be written to disk
+        :returns List of documents to be written or published to a source (e.g. disk or S3 bucket)
         """
         providers = self._instantiate_all_providers(self.custom_providers)
         seeded_providers = self._seed_providers(providers, seed)

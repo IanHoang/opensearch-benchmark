@@ -26,7 +26,7 @@ from mimesis.random import Random
 from mimesis.providers.base import BaseProvider
 from tqdm import tqdm
 
-from osbenchmark.exceptions import SystemSetupError, ConfigError, MappingsError
+from osbenchmark.exceptions import ConfigError, MappingsError
 from osbenchmark.synthetic_data_generator.strategies import DataGenerationStrategy
 from osbenchmark.synthetic_data_generator.types import SyntheticDataGeneratorMetadata
 from osbenchmark.synthetic_data_generator.helpers import write_chunk, get_generation_settings, setup_custom_tqdm_formatting
@@ -52,13 +52,17 @@ class MappingStrategy(DataGenerationStrategy):
 
     def generate_data_chunk_from_worker(self, docs_per_chunk: int, seed: Optional[int]) -> list:
         """
-        Within the scope of a Dask worker. Reconstructs the MappingConverter and generates documents.
-        This is because Dask coordinator needs to serialize and deserialize objects when passing them to a worker.
-        Generates the generate_fake_document, which gets invoked N number of times before returning a list of documents.
+        This method is submitted to Dask worker and can be thought of as the worker performing a job, which is calling the
+        MappingConverter's static method generate_fake_document() function to generate documents.
+        The worker will call the function N number of times to generate N docs of data before returning results.
+
+        Note: This method reconstructs the MappingConverter because Dask coordinator requires serializing and deserializing objects
+        when passing them to a worker. Generates the generate_fake_document, which gets invoked N number of times
+        before returning a list of documents.
 
         Returns: List of generated documents.
         """
-        # Initialize parameters given to worker
+        # Initialize mapping generation values (params from sdg-config.yml) given to worker
         mapping_generator_logic = MappingConverter(self.mapping_generation_values, seed)
         mappings_with_generators = mapping_generator_logic.transform_mapping_to_generators(self.index_mapping)
 
