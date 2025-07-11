@@ -7,12 +7,8 @@
 # GitHub history for details.
 
 import logging
-from types import ModuleType
 from typing import Optional, Callable
-import time
 import os
-import hashlib
-import importlib.util
 import random
 import datetime
 import uuid
@@ -77,7 +73,7 @@ class MappingStrategy(DataGenerationStrategy):
         return MappingConverter.generate_fake_document(transformed_mapping=converted_mappings)
 
     def calculate_avg_doc_size(self):
-        # TODO: Change this to pickle
+        # Didn't do pickle because this seems to be more accurate
         output = [self.generate_test_document()]
         write_chunk(output, '/tmp/test-size.json')
 
