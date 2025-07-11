@@ -101,7 +101,6 @@ class SyntheticDataGenerator:
 
                     futures = self.strategy.generate_data_chunks_across_workers(self.dask_client, docs_per_chunk, seeds)
 
-                    # Generate data across all workers
                     writing_start_time = time.time()
                     for _, data in as_completed(futures, with_results=True):
                         docs_written_from_chunk, written_bytes = write_chunk(data, file_path)
