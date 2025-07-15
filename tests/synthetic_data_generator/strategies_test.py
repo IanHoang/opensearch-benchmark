@@ -12,6 +12,7 @@ import pytest
 from osbenchmark.exceptions import ConfigError
 from osbenchmark.synthetic_data_generator.types import SyntheticDataGeneratorMetadata
 from osbenchmark.synthetic_data_generator.strategies import MappingStrategy, CustomModuleStrategy
+from osbenchmark.synthetic_data_generator.strategies.mapping_strategy import MappingConverter
 from osbenchmark.synthetic_data_generator import helpers
 
 
@@ -555,3 +556,343 @@ class TestMappingStrategy:
             for field in fields:
                 assert field in doc
 
+class TestMappingConverter:
+
+    @pytest.fixture
+    def mock_sdg_config(self):
+        sdg_config = {
+                    'settings': {'workers': 8, 'max_file_size_gb': 1, 'chunk_size': 10000},
+                    'MappingGenerationValues': {
+                        'generator_overrides': {
+                            'integer': {'min': 0, 'max': 20},
+                            'long': {'min': 0, 'max': 1000},
+                            'float': {'min': 0.0, 'max': 1.0},
+                            'double': {'min': 0.0, 'max': 2000.0},
+                            'date': {'start_date': '2020-01-01', 'end_date': '2023-01-01', 'format': 'yyyy-mm-dd'},
+                            'text': {'must_include': ['lorem', 'ipsum']},
+                            'keyword': {'choices': ['naruto', 'sakura', 'sasuke']}
+                        },
+                        'field_overrides': {
+                            'id': {'generator': 'generate_keyword',
+                                'params': {'choices': ['Helly R', 'Mark S', 'Irving B']}},
+                            'promo_codes': {'generator': 'generate_keyword', 'params': {'choices': ['HOT_SUMMER', 'TREATSYUM!']}},
+                            'preferences.language': {'generator': 'generate_keyword', 'params': {'choices': ['Python', 'English']}},
+                            'payment_methods.type': {'generator': 'generate_keyword', 'params': {'choices': ['Visa', 'Mastercard', 'Cash', 'Venmo']}},
+                            'preferences.allergies': {'generator': 'generate_keyword', 'params': {'choices': ['Squirrels', 'Cats']}},
+                            'favorite_locations.name': {'generator': 'generate_keyword', 'params': {'choices': ['Austin', 'NYC', 'Miami']}}
+                        }
+                    }
+                }
+
+        return sdg_config
+
+    @pytest.fixture
+    def basic_opensearch_index_mappings(self):
+        return {
+            "mappings": {
+                "properties": {
+                "title": {
+                    "type": "text",
+                    "analyzer": "standard",
+                    "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                    }
+                },
+                "description": {
+                    "type": "text"
+                },
+                "price": {
+                    "type": "float"
+                },
+                "created_at": {
+                    "type": "date",
+                    "format": "strict_date_optional_time||epoch_millis"
+                },
+                "is_available": {
+                    "type": "boolean"
+                },
+                "category_id": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "keyword"
+                }
+                }
+            },
+            "settings": {
+                "number_of_shards": 1,
+                "number_of_replicas": 1
+            }
+        }
+
+    @pytest.fixture
+    def complex_opensearch_index_mappings(self):
+        return {
+                    "mappings": {
+                    "dynamic": "strict",
+                    "properties": {
+                        "user": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                            "type": "keyword"
+                            },
+                            "email": {
+                            "type": "keyword"
+                            },
+                            "name": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                                },
+                                "completion": {
+                                "type": "completion"
+                                }
+                            },
+                            "analyzer": "standard"
+                            },
+                            "address": {
+                            "type": "object",
+                            "properties": {
+                                "street": {
+                                "type": "text"
+                                },
+                                "city": {
+                                "type": "keyword"
+                                },
+                                "state": {
+                                "type": "keyword"
+                                },
+                                "zip": {
+                                "type": "keyword"
+                                },
+                                "location": {
+                                "type": "geo_point"
+                                }
+                            }
+                            },
+                            "preferences": {
+                            "type": "object",
+                            "dynamic": True
+                            }
+                        }
+                        },
+                        "orders": {
+                        "type": "nested",
+                        "properties": {
+                            "id": {
+                            "type": "keyword"
+                            },
+                            "date": {
+                            "type": "date",
+                            "format": "strict_date_optional_time||epoch_millis"
+                            },
+                            "amount": {
+                            "type": "scaled_float",
+                            "scaling_factor": 100
+                            },
+                            "status": {
+                            "type": "keyword"
+                            },
+                            "items": {
+                            "type": "nested",
+                            "properties": {
+                                "product_id": {
+                                "type": "keyword"
+                                },
+                                "name": {
+                                "type": "text",
+                                "fields": {
+                                    "keyword": {
+                                    "type": "keyword"
+                                    }
+                                }
+                                },
+                                "quantity": {
+                                "type": "short"
+                                },
+                                "price": {
+                                "type": "float"
+                                },
+                                "categories": {
+                                "type": "keyword"
+                                }
+                            }
+                            },
+                            "shipping_address": {
+                            "type": "object",
+                            "properties": {
+                                "street": {
+                                "type": "text"
+                                },
+                                "city": {
+                                "type": "keyword"
+                                },
+                                "state": {
+                                "type": "keyword"
+                                },
+                                "zip": {
+                                "type": "keyword"
+                                },
+                                "location": {
+                                "type": "geo_point"
+                                }
+                            }
+                            }
+                        }
+                        },
+                        "activity_log": {
+                        "type": "nested",
+                        "properties": {
+                            "timestamp": {
+                            "type": "date"
+                            },
+                            "action": {
+                            "type": "keyword"
+                            },
+                            "ip_address": {
+                            "type": "ip"
+                            },
+                            "details": {
+                            "type": "object",
+                            "enabled": False
+                            }
+                        }
+                        },
+                        "metadata": {
+                        "type": "object",
+                        "properties": {
+                            "created_at": {
+                            "type": "date"
+                            },
+                            "updated_at": {
+                            "type": "date"
+                            },
+                            "tags": {
+                            "type": "keyword"
+                            },
+                            "source": {
+                            "type": "keyword"
+                            },
+                            "version": {
+                            "type": "integer"
+                            }
+                        }
+                        },
+                        "description": {
+                        "type": "text",
+                        "analyzer": "english",
+                        "fields": {
+                            "keyword": {
+                            "type": "keyword",
+                            "ignore_above": 256
+                            },
+                            "standard": {
+                            "type": "text",
+                            "analyzer": "standard"
+                            }
+                        }
+                        },
+                        "ranking_scores": {
+                        "type": "object",
+                        "properties": {
+                            "popularity": {
+                            "type": "float"
+                            },
+                            "relevance": {
+                            "type": "float"
+                            },
+                            "quality": {
+                            "type": "float"
+                            }
+                        }
+                        },
+                        "permissions": {
+                        "type": "nested",
+                        "properties": {
+                            "user_id": {
+                            "type": "keyword"
+                            },
+                            "role": {
+                            "type": "keyword"
+                            },
+                            "granted_at": {
+                            "type": "date"
+                            }
+                        }
+                        }
+                    }
+                    },
+                    "settings": {
+                    "number_of_shards": 3,
+                    "number_of_replicas": 2,
+                    "analysis": {
+                        "analyzer": {
+                        "email_analyzer": {
+                            "type": "custom",
+                            "tokenizer": "uax_url_email",
+                            "filter": ["lowercase", "stop"]
+                        }
+                        }
+                    }
+                    }
+                }
+
+    @pytest.fixture
+    def mapping_converter(self, mock_sdg_config):
+        mapping_generation_values = mock_sdg_config.get("MappingGenerationValues", {})
+        mapping_converter_logic = MappingConverter(mapping_generation_values, 12345)
+
+        return mapping_converter_logic
+
+    def test_generating_documents_from_basic_mappings(self, mapping_converter, basic_opensearch_index_mappings):
+        mappings_with_generators = mapping_converter.transform_mapping_to_generators(basic_opensearch_index_mappings)
+
+        document = MappingConverter.generate_fake_document(transformed_mapping=mappings_with_generators)
+
+        fields = ["title", "description", "price", "created_at", "is_available", "category_id", "tags"]
+        for field in fields:
+            assert field in document
+
+
+    def test_generating_documents_for_complex_mappings(self, mapping_converter, complex_opensearch_index_mappings):
+        mappings_with_generators = mapping_converter.transform_mapping_to_generators(complex_opensearch_index_mappings)
+
+        document = MappingConverter.generate_fake_document(transformed_mapping=mappings_with_generators)
+
+        fields = ["user", "orders", "activity_log", "metadata", "description", "ranking_scores", "permissions"]
+        for field in fields:
+            assert field in document
+
+    def test_generating_documents_for_with_overrides(self, mapping_converter):
+        basic_mappings = {
+            "properties": {
+                "id": {
+                    "type": "keyword"
+                },
+                "amount": {
+                    "type": "float"
+                },
+                "created_at": {
+                    "type": "date"
+                },
+                "status": {
+                    "type": "keyword"
+                }
+            }
+        }
+
+        mappings_with_generators_and_overrides = mapping_converter.transform_mapping_to_generators(basic_mappings)
+        document = MappingConverter.generate_fake_document(transformed_mapping=mappings_with_generators_and_overrides)
+
+        fields = ["id", "amount", "created_at", "status"]
+
+        for field in fields:
+            assert field in document
+
+        assert document["id"] in ["Helly R", "Mark S", "Irving B"]
