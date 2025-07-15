@@ -9,10 +9,6 @@
 from unittest.mock import MagicMock, patch
 import pytest
 
-from mimesis.providers.base import BaseProvider
-from dask.distributed import Client, get_client, as_completed
-
-
 from osbenchmark.synthetic_data_generator.synthetic_data_generator import SyntheticDataGenerator
 from osbenchmark.synthetic_data_generator.strategies import MappingStrategy, CustomModuleStrategy
 from osbenchmark.synthetic_data_generator.types import SyntheticDataGeneratorMetadata
@@ -96,6 +92,8 @@ class TestSyntheticDataGeneratorWithCustomStrategy:
         sdg.strategy.generate_test_document.assert_called_once()
         assert result == {'name': 'Shanks'}
 
+    def test_generate_dataset(self):
+        pass
 
 class TestSyntheticDataGeneratorWithMappingStrategy:
 
@@ -147,10 +145,10 @@ class TestSyntheticDataGeneratorWithMappingStrategy:
 
     @pytest.fixture
     def setup_mapping_strategy(self, setup_sdg_metadata, mock_sdg_config, mock_custom_module):
-        custom_strategy = MagicMock()
-        custom_strategy.generate_test_document.return_value = {'name': 'Shanks'}
+        mapping_strategy = MagicMock()
+        mapping_strategy.generate_test_document.return_value = {'name': 'Shanks'}
 
-        return custom_strategy
+        return mapping_strategy
 
     @pytest.fixture
     def setup_custom_sdg(self, setup_sdg_metadata, mock_sdg_config, mock_dask_client, setup_mapping_strategy):
@@ -174,9 +172,3 @@ class TestSyntheticDataGeneratorWithMappingStrategy:
 
         sdg.strategy.generate_test_document.assert_called_once()
         assert result == {'name': 'Shanks'}
-
-
-
-
-
-
