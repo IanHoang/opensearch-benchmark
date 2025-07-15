@@ -32,9 +32,7 @@ class CustomModuleStrategy(DataGenerationStrategy):
         self.sdg_config = sdg_config
         self.custom_module = custom_module
 
-        try:
-            hasattr(self.custom_module, 'generate_fake_document')
-        except:
+        if not hasattr(self.custom_module, 'generate_fake_document'):
             msg = f"Custom module at [{self.sdg_metadata.custom_module_path}] does not define a function called generate_fake_document(). Ensure that this method is defined."
             raise ConfigError(msg)
 

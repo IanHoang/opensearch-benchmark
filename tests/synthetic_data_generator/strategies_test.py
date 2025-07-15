@@ -9,6 +9,7 @@
 from unittest.mock import MagicMock, patch
 import pytest
 
+from osbenchmark.exceptions import ConfigError
 from osbenchmark.synthetic_data_generator.types import SyntheticDataGeneratorMetadata
 from osbenchmark.synthetic_data_generator.strategies import MappingStrategy, CustomModuleStrategy
 from osbenchmark.synthetic_data_generator import helpers
@@ -158,6 +159,16 @@ class TestCustomStrategy:
         for document in data_chunk:
             for field in sample_field_names:
                 assert field in document
+
+    def test_custom_module_missing_generate_fake_document_function(self, setup_sdg_metadata, mock_sdg_config):
+        import os
+        import re
+        sample_module_path = f"{os.path.dirname(os.path.realpath(__file__))}/incorrect_sample_custom_module.py"
+        custom_module = helpers.load_user_module(sample_module_path)
+
+        error_msg_expected = re.escape("Custom module at [/path/to/module] does not define a function called generate_fake_document(). Ensure that this method is defined.")
+        with pytest.raises(ConfigError, match=error_msg_expected):
+            strategy = CustomModuleStrategy(setup_sdg_metadata, mock_sdg_config, custom_module)
 
 
 class TestMappingStrategy:
@@ -533,8 +544,14 @@ class TestMappingStrategy:
                 assert field in doc[0]
 
     def test_generate_data_chunk_from_worker(self, mapping_strategy_with_basic_mappings):
+        fields = ["title", "description", "price", "created_at", "is_available", "category_id", "tags"]
+
         data_chunk = mapping_strategy_with_basic_mappings.generate_data_chunk_from_worker(3, 12345)
 
         assert len(data_chunk) == 3
         assert isinstance(data_chunk, list)
+
+        for doc in data_chunk:
+            for field in fields:
+                assert field in doc
 
