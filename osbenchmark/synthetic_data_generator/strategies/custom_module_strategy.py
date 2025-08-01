@@ -9,16 +9,17 @@
 import logging
 from types import ModuleType
 from typing import Optional, Callable
+import pandas as pd
 
 from dask.distributed import Client
 from mimesis import Generic
 from mimesis.locales import Locale
 from mimesis.random import Random
 from mimesis.providers.base import BaseProvider
-
-from osbenchmark.exceptions import ConfigError
+from osbenchmark import exceptions
 from osbenchmark.synthetic_data_generator.strategies import DataGenerationStrategy
 from osbenchmark.synthetic_data_generator.types import SyntheticDataGeneratorMetadata
+from osbenchmark.synthetic_data_generator.timeseries_partitioner import TimeSeriesPartitioner
 
 class CustomModuleStrategy(DataGenerationStrategy):
     def __init__(self, sdg_metadata: SyntheticDataGeneratorMetadata,  sdg_config: dict, custom_module: ModuleType) -> None:
@@ -29,7 +30,7 @@ class CustomModuleStrategy(DataGenerationStrategy):
 
         if not hasattr(self.custom_module, 'generate_synthetic_document'):
             msg = f"Custom module at [{self.sdg_metadata.custom_module_path}] does not define a function called generate_synthetic_document(). Ensure that this method is defined."
-            raise ConfigError(msg)
+            raise exceptions.ConfigError(msg)
 
         # Fetch settings and custom module components from sdg-config.yml
         custom_module_values = self.sdg_config.get('CustomGenerationValues', {})
@@ -38,21 +39,37 @@ class CustomModuleStrategy(DataGenerationStrategy):
             self.custom_providers = {name: getattr(self.custom_module, name) for name in custom_module_values.get('custom_providers', [])}
         except TypeError:
             msg = "Synthetic Data Generator Config has custom_lists and custom_providers pointing to null values. Either populate or remove."
-            raise ConfigError(msg)
+            raise exceptions.ConfigError(msg)
 
     # pylint: disable=arguments-differ
-    def generate_data_chunks_across_workers(self, dask_client: Client, docs_per_chunk: int, seeds: list ) -> list:
+    def generate_data_chunks_across_workers(self, dask_client: Client, docs_per_chunk: int, seeds: list, timeseries_enabled: dict = None, timeseries_windows: list = None) -> list:
         """
         Submits workers to generate data chunks and returns Dask futures
 
         Returns: list of Dask Futures
         """
-        return [dask_client.submit(
-            self.generate_data_chunk_from_worker, self.custom_module.generate_synthetic_document,
-            docs_per_chunk, seed) for seed in seeds]
+        if timeseries_enabled and timeseries_windows:
+            futures = []
+            for _ in range(len(seeds)):
+                seed = seeds[_]
+                window = timeseries_windows[_]
+                self.logger.info("Timeseries Settings: %s", timeseries_enabled)
+                future = dask_client.submit(
+                    self.generate_data_chunk_from_worker, self.custom_module.generate_synthetic_document,
+                    docs_per_chunk, seed, timeseries_enabled, window,
+                )
+
+                futures.append(future)
+
+            return futures
+        else:
+            # If not using timeseries approach
+            return [dask_client.submit(
+                self.generate_data_chunk_from_worker, self.custom_module.generate_synthetic_document,
+                docs_per_chunk, seed) for seed in seeds]
 
 
-    def generate_data_chunk_from_worker(self, generate_synthetic_document: Callable, docs_per_chunk: int, seed: Optional[int]) -> list:
+    def generate_data_chunk_from_worker(self, generate_synthetic_document: Callable, docs_per_chunk: int, seed: Optional[int], timeseries_enabled: dict = None, timeseries_window: set = None) -> list:
         """
         This method is submitted to Dask worker and can be thought of as the worker performing a job, which is calling the
         custom module's generate_synthetic_document() function to generate documents.
@@ -71,7 +88,22 @@ class CustomModuleStrategy(DataGenerationStrategy):
         providers = self._instantiate_all_providers(self.custom_providers)
         seeded_providers = self._seed_providers(providers, seed)
 
-        return [generate_synthetic_document(providers=seeded_providers, **self.custom_lists) for _ in range(docs_per_chunk)]
+        if timeseries_enabled and timeseries_enabled['timeseries_field']:
+            synthetic_docs = []
+            datetimestamps: pd.Timestamp = TimeSeriesPartitioner.generate_datetimestamps_from_window(window=timeseries_window, frequency=timeseries_enabled['timeseries_frequency'], format=timeseries_enabled['timeseries_format'])
+            for datetimestamp in datetimestamps:
+                document = generate_synthetic_document(providers=seeded_providers, **self.custom_lists)
+                try:
+                    document[timeseries_enabled['timeseries_field']] = datetimestamp.strftime(timeseries_enabled['timeseries_format'])
+                    synthetic_docs.append(document)
+
+                except Exception as e:
+                    raise exceptions.DataError("Encountered problem when inserting datetimestamps for timeseries data being generated: {e}")
+
+            return synthetic_docs
+
+        else:
+            return [generate_synthetic_document(providers=seeded_providers, **self.custom_lists) for _ in range(docs_per_chunk)]
 
     def generate_test_document(self):
         providers = self._instantiate_all_providers(self.custom_providers)
@@ -83,7 +115,7 @@ class CustomModuleStrategy(DataGenerationStrategy):
             msg = "Encountered AttributeError when setting up custom_providers and custom_lists. " + \
                     "It seems that your module might be using custom_lists and custom_providers." + \
                     f"Please ensure you have provided a custom config with custom_providers and custom_lists: {e}"
-            raise ConfigError(msg)
+            raise exceptions.ConfigError(msg)
         return document
 
     def _instantiate_all_providers(self, custom_providers):
