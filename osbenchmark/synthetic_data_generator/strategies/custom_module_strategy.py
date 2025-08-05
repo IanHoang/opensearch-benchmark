@@ -53,7 +53,6 @@ class CustomModuleStrategy(DataGenerationStrategy):
             for _ in range(len(seeds)):
                 seed = seeds[_]
                 window = timeseries_windows[_]
-                self.logger.info("Timeseries Settings: %s", timeseries_enabled)
                 future = dask_client.submit(
                     self.generate_data_chunk_from_worker, self.custom_module.generate_synthetic_document,
                     docs_per_chunk, seed, timeseries_enabled, window,
@@ -94,7 +93,7 @@ class CustomModuleStrategy(DataGenerationStrategy):
             for datetimestamp in datetimestamps:
                 document = generate_synthetic_document(providers=seeded_providers, **self.custom_lists)
                 try:
-                    document[timeseries_enabled['timeseries_field']] = datetimestamp.strftime(timeseries_enabled['timeseries_format'])
+                    document[timeseries_enabled['timeseries_field']] = datetimestamp
                     synthetic_docs.append(document)
 
                 except Exception as e:

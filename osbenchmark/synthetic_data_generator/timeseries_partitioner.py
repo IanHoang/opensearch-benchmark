@@ -18,6 +18,7 @@ import osbenchmark.exceptions as exceptions
 class TimeSeriesPartitioner:
 
     # Change this into a dictionary that points to which frequencies can have which formats
+    # TODO: Add epoch timestamp in ms and s
     VALID_DATETIMESTAMPS_FORMATS = [
         "%Y-%m-%d",                 # 2023-05-20
         "%Y-%m-%dT%H:%M:%S",        # 2023-05-20T15:30:45
@@ -47,6 +48,8 @@ class TimeSeriesPartitioner:
         "%Y/%m/%d",              # 2023/05/20
         "%Y/%m/%d %H:%M:%S",     # 2023/05/20 15:30:45
         "%Y%m%d%H%M%S",          # 20230520153045
+        "epoch_s",
+        "epoch_ms"
     ]
 
     AVAILABLE_FREQUENCIES = ['B', 'C', 'D', 'h', 'bh', 'cbh', 'min', 's', 'ms']
@@ -159,8 +162,6 @@ class TimeSeriesPartitioner:
     @staticmethod
     def generate_datetimestamps_from_window(window: set, frequency: str = "min", format: str = "%Y-%m-%dT%H:%M:%S") -> Generator:
         logger = logging.getLogger(__name__)
-        logger.info("HERE NOW!")
-        logger.info("Window type: %s", type(window))
         if frequency not in TimeSeriesPartitioner.AVAILABLE_FREQUENCIES:
             msg = f"Frequency {frequency} not found in available frequencies {TimeSeriesPartitioner.AVAILABLE_FREQUENCIES}"
             raise exceptions.ConfigError(msg)
@@ -172,15 +173,17 @@ class TimeSeriesPartitioner:
         try:
             start_datetimestamp = window[0]
             end_datetimestamp = window[1]
-            generated_datetimestamps = pd.date_range(start_datetimestamp, end_datetimestamp, freq=frequency)
-            logger.info("Type: %s", generated_datetimestamps)
+            generated_datetimestamps: pd.DatetimeIndex = pd.date_range(start_datetimestamp, end_datetimestamp, freq=frequency)
 
             #TODO: Handle formatting after generating iterator?
-            # if format and format in TimeSeriesPartitioner.VALID_DATETIMESTAMPS_FORMATS:
-            #     generated_datetimestamps = generated_datetimestamps.strftime(date_format=format)
+            if format and format in TimeSeriesPartitioner.VALID_DATETIMESTAMPS_FORMATS:
+                if format == "epoch_s":
+                    generated_datetimestamps = generated_datetimestamps.map(lambda x: int(x.timestamp()))
+                elif format == "epoch_ms":
+                    generated_datetimestamps = generated_datetimestamps.map(lambda x: int(x.timestamp() * 1000))
+                else:
+                    generated_datetimestamps = generated_datetimestamps.strftime(date_format=format)
 
-            logger.info("Type: %s", generated_datetimestamps)
-            logger.info("Type: %s", iter(generated_datetimestamps))
             return iter(generated_datetimestamps)
 
         except IndexError:
