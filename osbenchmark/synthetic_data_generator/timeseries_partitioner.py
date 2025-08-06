@@ -80,6 +80,8 @@ class TimeSeriesPartitioner:
         '''
         returns: a list of timestamp pairs where each timestamp pair is a set containing start datetime and end datetime
         '''
+        # TODO: Give option to users to use a smaller frequency if it's better.
+        # TODO: Get enough frequencies to where it's
         # Determine optimal time settings
         # Check if number of docs generated will fit in the timestamp. Adjust frequency as needed
         expected_number_of_docs = self.total_size_bytes // self.avg_document_size
@@ -91,7 +93,6 @@ class TimeSeriesPartitioner:
 
         if number_of_timestamps < expected_number_of_docs_with_buffer:
             self.logger.info("Number of timestamps generated is less than expected docs generated. Trying to find the optimal frequency")
-            # print("Number of timestamps generated is less than expected docs generated. Trying to find the optimal frequency")
             if self.frequency == 'ms':
                 self.logger.error("No other time frequencies to try. Not enough timestamps to generate for docs. Please expand dates and frequency accordingly.")
                 raise exceptions.ConfigError("No other time frequencies to try. Not enough timestamps to generate for docs. Please expand dates and frequency accordingly.")
@@ -101,15 +102,13 @@ class TimeSeriesPartitioner:
             frequency = ""
             while frequencies_to_try:
                 frequency = frequencies_to_try.popleft()
+                # TODO: Add opportunity to split this up if too large for memory
                 datetimeindex = pd.date_range(self.start_date, self.end_date, freq=frequency)
                 number_of_timestamps = len(datetimeindex)
-                print("Number of timestamps and docs", number_of_timestamps, expected_number_of_docs_with_buffer)
                 if number_of_timestamps > expected_number_of_docs_with_buffer:
-                    print(f"Using frequency {frequency} resulted in more timestamps")
                     self.logger.info("Using [%s] frequency as this resulted in more timestamps", frequency)
                     break
                 else:
-                    print(f"Using frequency {frequency} did not reuslt in more timestamps")
                     self.logger.info("Using [%s] frequency did not result in more timestamps", frequency)
 
             #TODO: Update the timeseries enabled settings too so downstream isn't confused
