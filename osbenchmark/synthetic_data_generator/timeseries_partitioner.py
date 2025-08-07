@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import math
 from collections import deque
+import sys
 from typing import Generator
 import time
 
@@ -48,8 +49,8 @@ class TimeSeriesPartitioner:
         "%Y/%m/%d",              # 2023/05/20
         "%Y/%m/%d %H:%M:%S",     # 2023/05/20 15:30:45
         "%Y%m%d%H%M%S",          # 20230520153045
-        "epoch_s",
-        "epoch_ms"
+        "epoch_s",               # Epoch time in seconds format
+        "epoch_ms"               # Epocjh time in ms format
     ]
 
     AVAILABLE_FREQUENCIES = ['B', 'C', 'D', 'h', 'bh', 'cbh', 'min', 's', 'ms']
@@ -81,7 +82,7 @@ class TimeSeriesPartitioner:
         returns: a list of timestamp pairs where each timestamp pair is a set containing start datetime and end datetime
         '''
         # TODO: Give option to users to use a smaller frequency if it's better.
-        # TODO: Get enough frequencies to where it's
+        # TODO: Add Smart Frequency Chooser. Ensure smart batches (smaller generators added to memory) and get enough frequency distributions
         # Determine optimal time settings
         # Check if number of docs generated will fit in the timestamp. Adjust frequency as needed
         expected_number_of_docs = self.total_size_bytes // self.avg_document_size
@@ -93,26 +94,19 @@ class TimeSeriesPartitioner:
 
         if number_of_timestamps < expected_number_of_docs_with_buffer:
             self.logger.info("Number of timestamps generated is less than expected docs generated. Trying to find the optimal frequency")
+            # Because last in the available frequencies
             if self.frequency == 'ms':
                 self.logger.error("No other time frequencies to try. Not enough timestamps to generate for docs. Please expand dates and frequency accordingly.")
                 raise exceptions.ConfigError("No other time frequencies to try. Not enough timestamps to generate for docs. Please expand dates and frequency accordingly.")
 
-            frequencies_to_try = deque(TimeSeriesPartitioner.AVAILABLE_FREQUENCIES[TimeSeriesPartitioner.AVAILABLE_FREQUENCIES.index(self.frequency)+1:])
-            print(frequencies_to_try)
-            frequency = ""
-            while frequencies_to_try:
-                frequency = frequencies_to_try.popleft()
-                # TODO: Add opportunity to split this up if too large for memory
-                datetimeindex = pd.date_range(self.start_date, self.end_date, freq=frequency)
-                number_of_timestamps = len(datetimeindex)
-                if number_of_timestamps > expected_number_of_docs_with_buffer:
-                    self.logger.info("Using [%s] frequency as this resulted in more timestamps", frequency)
-                    break
-                else:
-                    self.logger.info("Using [%s] frequency did not result in more timestamps", frequency)
-
             #TODO: Update the timeseries enabled settings too so downstream isn't confused
-            self.frequency = frequency
+            optimal_frequency = self._try_other_frequencies(expected_number_of_docs_with_buffer)
+            if not self._does_user_want_optimal_frequency(user_frequency=self.frequency, optimal_frequency=optimal_frequency):
+                self.logger.info("User does not want to use optimal frequency and will cancel generation.")
+                sys.exit(1)
+
+            self.frequency = optimal_frequency
+            print("Frequency chosen: ", self.frequency)
             self.logger.info("Updated frequency to use [%s]", self.frequency)
             # print(f"Using frequeny: {self.frequency}")
             # print(f"Length of timestamps: {number_of_timestamps}")
@@ -131,6 +125,7 @@ class TimeSeriesPartitioner:
         # print("")
 
         start_time = time.time()
+        datetimeindex = pd.date_range(self.start_date, self.end_date, freq=self.frequency)
         datetimestamps = datetimeindex.values # get np array
         start_indices = np.arange(0, len(datetimestamps), time_window_length)
         end_indices = np.minimum(start_indices + time_window_length -1, len(datetimestamps) - 1)
@@ -204,6 +199,41 @@ class TimeSeriesPartitioner:
         logger.info("First timestamp from all chunks: %s ", [result[0][timeseries_field] for result in sorted_results])
 
         return sorted_results
+
+    def _try_other_frequencies(self, expected_number_of_docs_with_buffer: int) -> str:
+        frequencies_to_try = deque(TimeSeriesPartitioner.AVAILABLE_FREQUENCIES[TimeSeriesPartitioner.AVAILABLE_FREQUENCIES.index(self.frequency)+1:])
+        print(frequencies_to_try)
+        frequency = ""
+        while frequencies_to_try:
+            frequency = frequencies_to_try.popleft()
+            # TODO: Add opportunity to split this up if too large for memory. Add a smart mechanism to try to load it into memory first and if that doesn't work, then it splits.
+            datetimeindex = pd.date_range(self.start_date, self.end_date, freq=frequency)
+            number_of_timestamps = len(datetimeindex)
+            print("Number of docs expected, frequency, and number of timestamps: ", expected_number_of_docs_with_buffer, frequency, number_of_timestamps)
+            if number_of_timestamps > expected_number_of_docs_with_buffer:
+                self.logger.info("Using [%s] frequency as this resulted in more timestamps", frequency)
+                break
+            else:
+                self.logger.info("Using [%s] frequency did not result in more timestamps", frequency)
+
+        return frequency
+
+    def _does_user_want_optimal_frequency(self, user_frequency: str, optimal_frequency: str) -> bool:
+        valid_responses = ['y', 'yes', 'n', 'no']
+        msg = f"The frequency [{optimal_frequency}] is a better option for the number of docs you are trying to generate. " + \
+            f"If you prefer your current frequency [{user_frequency}], please extend the time frame. " + \
+            f"Would you like to use [{optimal_frequency}] as the frequency? (y/n): "
+        requested_input = input(msg)
+        while requested_input.lower() not in valid_responses:
+            msg = f"Please enter y or n. The frequency [{optimal_frequency}] is a better option for the number of docs you are trying to generate. " + \
+            f"If you prefer your current frequency [{user_frequency}], please extend the time frame. " + \
+            f"Would you like to use [{optimal_frequency}] as the frequency? (y/n): "
+            requested_input = input(msg)
+
+        if requested_input.lower() == "y" or requested_input.lower() == "yes":
+            return True
+        else:
+            return False
 
 
 
