@@ -67,7 +67,7 @@ class SyntheticDataGenerator:
 
         current_size = 0
         docs_written = 0
-        file_counter = 0
+        file_counter = generation_settings['filename_suffix_begins_at'] if generation_settings["filename_suffix_begins_at"] else 0
 
         generated_dataset_details = []
 

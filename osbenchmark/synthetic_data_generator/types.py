@@ -16,6 +16,7 @@ DEFAULT_GENERATION_SETTINGS = {
     "workers": os.cpu_count(),
     "max_file_size_gb": 40,
     "docs_per_chunk": 10000,
+    "filename_suffix_begins_at": 0,
     "timeseries_enabled": {}
 }
 
