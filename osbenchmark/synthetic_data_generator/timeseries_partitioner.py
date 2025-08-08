@@ -153,7 +153,7 @@ class TimeSeriesPartitioner:
                 else:
                     generated_datetimestamps = generated_datetimestamps.strftime(date_format=format)
 
-            return iter(generated_datetimestamps)
+            return generated_datetimestamps
 
         except IndexError:
             raise exceptions.SystemSetupError("IndexError encountered with accessing datetimestamp from window.")
