@@ -11,6 +11,7 @@ import logging
 import time
 import hashlib
 
+import dask
 from dask.distributed import Client, get_client, as_completed
 from tqdm import tqdm
 
@@ -86,8 +87,9 @@ class SyntheticDataGenerator:
                 total_size_bytes=total_size_bytes
             )
             timeseries_windows = timeseries_partitioner.generate_windows()
+            if timeseries_enabled_settings['timeseries_frequency'] != timeseries_partitioner.frequency:
+                timeseries_enabled_settings = timeseries_partitioner.get_updated_settings()
             self.logger.info("TimeSeries Windows: %s", timeseries_windows)
-
 
         dask_client = Client(n_workers=workers, threads_per_worker=1)  # We keep it to 1 thread because generating random data is CPU intensive
         self.logger.info("Number of workers to use: [%s]", workers)

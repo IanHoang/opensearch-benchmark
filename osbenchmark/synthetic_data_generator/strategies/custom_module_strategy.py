@@ -9,6 +9,7 @@
 import logging
 from types import ModuleType
 from typing import Optional, Callable
+from typing import Generator
 import pandas as pd
 
 from dask.distributed import Client
@@ -48,6 +49,7 @@ class CustomModuleStrategy(DataGenerationStrategy):
 
         Returns: list of Dask Futures
         """
+        self.logger.info("Generating data across workers")
         if timeseries_enabled and timeseries_windows:
             futures = []
             for _ in range(len(seeds)):
@@ -89,7 +91,7 @@ class CustomModuleStrategy(DataGenerationStrategy):
 
         if timeseries_enabled and timeseries_enabled['timeseries_field']:
             synthetic_docs = []
-            datetimestamps: pd.Timestamp = TimeSeriesPartitioner.generate_datetimestamps_from_window(window=timeseries_window, frequency=timeseries_enabled['timeseries_frequency'], format=timeseries_enabled['timeseries_format'])
+            datetimestamps: Generator = TimeSeriesPartitioner.generate_datetimestamps_from_window(window=timeseries_window, frequency=timeseries_enabled['timeseries_frequency'], format=timeseries_enabled['timeseries_format'])
             for datetimestamp in datetimestamps:
                 document = generate_synthetic_document(providers=seeded_providers, **self.custom_lists)
                 try:

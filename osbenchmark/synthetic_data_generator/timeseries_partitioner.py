@@ -53,6 +53,7 @@ class TimeSeriesPartitioner:
         "epoch_ms"               # Epocjh time in ms format
     ]
 
+    # TODO: Let's make this a hashmap so that we can ensure the invalid formats are not used (e.g. frequency is updated to ms and format is still seconds)
     AVAILABLE_FREQUENCIES = ['B', 'C', 'D', 'h', 'bh', 'cbh', 'min', 's', 'ms']
 
     def __init__(self, timeseries_enabled: dict, workers: int, docs_per_chunk: int, avg_document_size: int, total_size_bytes: int):
@@ -62,7 +63,7 @@ class TimeSeriesPartitioner:
         self.avg_document_size = avg_document_size
         self.total_size_bytes = total_size_bytes
 
-        # self.timestamp_field = self.timeseries_enabled['timeseries_field']
+        self.timeseries_field = self.timeseries_enabled['timeseries_field']
         self.start_date = self.timeseries_enabled.get('timeseries_start_date', "1/1/2019")
         self.end_date = self.timeseries_enabled.get('timeseries_end_date', "12/31/2019")
         self.frequency = self.timeseries_enabled.get('timeseries_frequency', 'min')
@@ -76,6 +77,15 @@ class TimeSeriesPartitioner:
         if self.format not in TimeSeriesPartitioner.VALID_DATETIMESTAMPS_FORMATS:
             msg = f"Format {self.format} not found in available format {TimeSeriesPartitioner.VALID_DATETIMESTAMPS_FORMATS}"
             raise exceptions.ConfigError(msg)
+
+    def get_updated_settings(self) -> dict:
+        return {
+            "timeseries_field": self.timeseries_field,
+            "timeseries_start_date": self.start_date,
+            "timeseries_end_date": self.end_date,
+            "timeseries_frequency": self.frequency,
+            "timeseries_format": self.format
+        }
 
     def generate_windows(self) -> Generator:
         '''
@@ -168,7 +178,6 @@ class TimeSeriesPartitioner:
             start_datetimestamp = window[0]
             end_datetimestamp = window[1]
             generated_datetimestamps: pd.DatetimeIndex = pd.date_range(start_datetimestamp, end_datetimestamp, freq=frequency)
-
             #TODO: Handle formatting after generating iterator?
             if format and format in TimeSeriesPartitioner.VALID_DATETIMESTAMPS_FORMATS:
                 if format == "epoch_s":
@@ -238,16 +247,11 @@ class TimeSeriesPartitioner:
 
 
 if __name__ == "__main__":
-    # timeseries_partitioner = TimeSeriesPartitioner({}, 10, 10000, 921, 21474836480)
-    # timeseries_windows = timeseries_partitioner.generate_windows()
-    # for i in range(10):
-    #     print(next(timeseries_windows))
-
     window = [(pd.Timestamp('2019-01-01 00:00:00'), pd.Timestamp('2019-01-01 02:46:39'))]
-    window_generator = TimeSeriesPartitioner.generate_datetimestamps_from_window(window)
-    print(next(window_generator))
-    print(next(window_generator))
-    print(next(window_generator))
-    print(next(window_generator))
-    print(next(window_generator))
-    print(next(window_generator))
+    window_2 = (pd.Timestamp('2024-01-01 00:25:20'), pd.Timestamp('2024-01-01 00:25:29.999000'))
+    # datetimestamp_generator = TimeSeriesPartitioner.generate_datetimestamps_from_window(window)
+    datetimestamp_generator_2 = TimeSeriesPartitioner.generate_datetimestamps_from_window(window_2, frequency="ms", format="epoch_s")
+
+    datetimestamps = [datetimestamp for datetimestamp in datetimestamp_generator_2]
+    print(datetimestamps[0:9])
+    print(len(datetimestamps))
