@@ -32,6 +32,7 @@ class SyntheticDataGenerator:
 
     def generate_seeds_for_workers(self, regenerate=False):
         # This adds latency so might consider deprecating this
+        seed_generation_start_time = time.time()
         client = get_client()
         workers = client.scheduler_info()['workers']
 
@@ -49,6 +50,8 @@ class SyntheticDataGenerator:
             seed = int(hash_hex[:8], 16)
             seeds.append(seed)
 
+        seed_generation_end_time = time.time()
+        self.logger.info("Seed generation took %s seconds", seed_generation_end_time - seed_generation_start_time)
         return seeds
 
     def generate_test_document(self):

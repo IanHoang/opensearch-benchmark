@@ -99,8 +99,7 @@ class TimeSeriesPartitioner:
         expected_number_of_docs_with_buffer = math.ceil((expected_number_of_docs * 0.1) + expected_number_of_docs)
 
         # Get number of timestamps with dates and frequencies
-        datetimeindex = pd.date_range(self.start_date, self.end_date, freq=self.frequency)
-        number_of_timestamps = len(datetimeindex)
+        number_of_timestamps = self._count_timestamps(frequency=self.frequency)
 
         if number_of_timestamps < expected_number_of_docs_with_buffer:
             self.logger.info("Number of timestamps generated is less than expected docs generated. Trying to find the optimal frequency")
@@ -209,15 +208,32 @@ class TimeSeriesPartitioner:
 
         return sorted_results
 
+    def _count_timestamps(self, frequency: str) -> int:
+        if frequency in ["B", "C", "bh", "cbh"]:
+            try:
+                return len(pd.date_range(start=self.start_date, end=self.end_date, freq=frequency))
+            except Exception as e:
+                msg = f"Had issues when generating and counting datetimestamps: {e}"
+                raise exceptions.SystemSetupError(msg)
+
+        else:
+            # Arithmetically calculate rather than load into memory
+            start_datetimestamp = pd.Timestamp(self.start_date)
+            end_datetimestamp = pd.Timestamp(self.end_date)
+
+            offset = pd.tseries.frequencies.to_offset(freq=frequency)
+            delta = end_datetimestamp - start_datetimestamp
+            count = int(delta / offset) + 1
+            return count
+
+
     def _try_other_frequencies(self, expected_number_of_docs_with_buffer: int) -> str:
         frequencies_to_try = deque(TimeSeriesPartitioner.AVAILABLE_FREQUENCIES[TimeSeriesPartitioner.AVAILABLE_FREQUENCIES.index(self.frequency)+1:])
         print(frequencies_to_try)
         frequency = ""
         while frequencies_to_try:
             frequency = frequencies_to_try.popleft()
-            # TODO: Add opportunity to split this up if too large for memory. Add a smart mechanism to try to load it into memory first and if that doesn't work, then it splits.
-            datetimeindex = pd.date_range(self.start_date, self.end_date, freq=frequency)
-            number_of_timestamps = len(datetimeindex)
+            number_of_timestamps = self._count_timestamps(frequency=frequency)
             print("Number of docs expected, frequency, and number of timestamps: ", expected_number_of_docs_with_buffer, frequency, number_of_timestamps)
             if number_of_timestamps > expected_number_of_docs_with_buffer:
                 self.logger.info("Using [%s] frequency as this resulted in more timestamps", frequency)
