@@ -10,6 +10,7 @@ import os
 import logging
 import time
 import hashlib
+from typing import Generator
 
 import dask
 from dask.distributed import Client, get_client, as_completed
@@ -77,7 +78,7 @@ class SyntheticDataGenerator:
 
         helpers.check_for_existing_files(self.sdg_metadata.output_path, self.sdg_metadata.index_name)
 
-        timeseries_windows = None
+        timeseries_window: Generator = None
         workers: int = generation_settings.get("workers")
         if timeseries_enabled_settings:
             self.logger.info("User is using timeseries enabled settings: %s", timeseries_enabled_settings)
@@ -89,10 +90,10 @@ class SyntheticDataGenerator:
                 avg_document_size=avg_document_size,
                 total_size_bytes=total_size_bytes
             )
-            timeseries_windows = timeseries_partitioner.generate_windows()
+            timeseries_window = timeseries_partitioner.create_window_generator()
             if timeseries_enabled_settings['timeseries_frequency'] != timeseries_partitioner.frequency:
                 timeseries_enabled_settings = timeseries_partitioner.get_updated_settings()
-            self.logger.info("TimeSeries Windows: %s", timeseries_windows)
+            self.logger.info("TimeSeries Windows Generator: %s", timeseries_window)
 
         dask_client = Client(n_workers=workers, threads_per_worker=1)  # We keep it to 1 thread because generating random data is CPU intensive
         self.logger.info("Number of workers to use: [%s]", workers)
@@ -130,8 +131,8 @@ class SyntheticDataGenerator:
                     seeds = self.generate_seeds_for_workers(regenerate=True)
                     self.logger.info("Using seeds: %s", seeds)
 
-                    if timeseries_windows and timeseries_enabled_settings:
-                        windows_for_workers = [next(timeseries_windows) for _ in range(workers)]
+                    if timeseries_window and timeseries_enabled_settings:
+                        windows_for_workers = [next(timeseries_window) for _ in range(workers)]
                         self.logger.info("Windows for workers: %s", windows_for_workers)
                         futures = self.strategy.generate_data_chunks_across_workers(
                             dask_client, docs_per_chunk, seeds,

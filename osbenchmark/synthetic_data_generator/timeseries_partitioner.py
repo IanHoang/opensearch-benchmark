@@ -87,12 +87,10 @@ class TimeSeriesPartitioner:
             "timeseries_format": self.format
         }
 
-    def generate_windows(self) -> Generator:
+    def create_window_generator(self) -> Generator:
         '''
         returns: a list of timestamp pairs where each timestamp pair is a set containing start datetime and end datetime
         '''
-        # TODO: Give option to users to use a smaller frequency if it's better.
-        # TODO: Add Smart Frequency Chooser. Ensure smart batches (smaller generators added to memory) and get enough frequency distributions
         # Determine optimal time settings
         # Check if number of docs generated will fit in the timestamp. Adjust frequency as needed
         expected_number_of_docs = self.total_size_bytes // self.avg_document_size
@@ -117,50 +115,19 @@ class TimeSeriesPartitioner:
             self.frequency = optimal_frequency
             print("Frequency chosen: ", self.frequency)
             self.logger.info("Updated frequency to use [%s]", self.frequency)
-            # print(f"Using frequeny: {self.frequency}")
-            # print(f"Length of timestamps: {number_of_timestamps}")
-            # print(f"Expected documents: {expected_number_of_docs}")
-            # print(f"Expected documents with buffer: {expected_number_of_docs_with_buffer}")
 
-        # Get total number of docs each worker is expected to make and expected rounds per worker
-        total_docs_made_by_each_worker = math.ceil(expected_number_of_docs / self.workers)
-        expected_rounds_per_worker = math.ceil(total_docs_made_by_each_worker / self.docs_per_chunk)
-        total_time_windows_needed = expected_rounds_per_worker * self.workers
-        time_window_length = self.docs_per_chunk
-        # print(f"Total docs made by each worker: {total_docs_made_by_each_worker}")
-        # print(f"Expected rounds per worker: {expected_rounds_per_worker}")
-        # print(f"Total time windows needed: {total_time_windows_needed}")
-        # print(f"Time window length: {time_window_length}")
-        # print("")
+        # After validating everything, let's return the window generator
+        return self.generate_datetimestamp_window()
 
-        start_time = time.time()
-        datetimeindex = pd.date_range(self.start_date, self.end_date, freq=self.frequency)
-        datetimestamps = datetimeindex.values # get np array
-        start_indices = np.arange(0, len(datetimestamps), time_window_length)
-        end_indices = np.minimum(start_indices + time_window_length -1, len(datetimestamps) - 1)
+    def generate_datetimestamp_window(self):
+        current = pd.Timestamp(self.start_date)
+        end = pd.Timestamp(self.end_date)
+        freq = pd.Timedelta(f"{self.docs_per_chunk-1}{self.frequency}") # Need to subtract one to include current timestamp.
 
-        start_times = pd.to_datetime(datetimestamps[start_indices])
-        end_times = pd.to_datetime(datetimestamps[end_indices])
-        datetime_windows = list(zip(start_times, end_times))
-        end_time = time.time()
-
-        # TODO: This is correct. It generates the number of timestamp windows needed for the available timestamps, not the number that are needed
-        # Find a way to adjust this list to be in order and slim it down to ones needed
-        print(f"Total time it took to generate timestamp window pairs {len(datetime_windows)}: {end_time - start_time} secs")
-        # Check the pair and see if they generated 10,000 timestamps
-        first_pair = datetime_windows[0]
-        first_pair_start_time = first_pair[0]
-        first_pair_end_time = first_pair[1]
-        length_of_first_pair = len(pd.date_range(first_pair_start_time, first_pair_end_time, freq=self.frequency))
-        if length_of_first_pair != self.docs_per_chunk:
-            msg = f"Length of first datetimestamps pair [{length_of_first_pair}] generated did not match the chunk size {self.docs_per_chunk}"
-            self.logger.error(msg)
-            raise exceptions.SystemSetupError(msg)
-        else:
-            self.logger.info("First datetimestamps pair: [%s]", first_pair)
-            self.logger.info("Length of first pair: [%s]", length_of_first_pair)
-
-            return iter(datetime_windows)
+        while current < end:
+            window_end = min(current + freq, end)
+            yield (current, window_end)
+            current += freq
 
     @staticmethod
     def generate_datetimestamps_from_window(window: set, frequency: str = "min", format: str = "%Y-%m-%dT%H:%M:%S") -> Generator:
