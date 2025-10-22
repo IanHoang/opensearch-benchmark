@@ -95,6 +95,7 @@ class MappingConverter:
             "object": self.generate_object,
             "nested": self.generate_nested,
             "geo_point": self.generate_geo_point,
+            "knn_vector": self.generate_knn_vector,
         }
 
     @staticmethod
@@ -208,6 +209,38 @@ class MappingConverter:
     def generate_nested(self, field_def: Dict[str, Any], **params) -> list:
         # Will be replaced by a list of nested objects
         return []
+
+    def generate_knn_vector(self, field_def: Dict[str, Any], **params) -> list:
+        dims = field_def.get("dimension", params.get("dimension", 128))
+        sample_vectors = params.get("sample_vectors", None)
+        
+        if sample_vectors:
+            noise_factor = params.get("noise_factor", 0.1)
+            distribution_type = params.get("distribution_type", "gaussian")
+            normalize = params.get("normalize", False)
+            
+            # Pick random sample vector
+            base_vector = random.choice(sample_vectors)
+            
+            # Generate noise based on distribution type
+            if distribution_type == "gaussian":
+                noise = [random.gauss(0, noise_factor) for _ in range(dims)]
+            else:  # uniform
+                noise = [random.uniform(-noise_factor, noise_factor) for _ in range(dims)]
+            
+            # Add noise to base vector
+            vector = [base_vector[i] + noise[i] for i in range(dims)]
+            
+            # Normalize if requested
+            if normalize:
+                magnitude = sum(x**2 for x in vector) ** 0.5
+                if magnitude > 0:
+                    vector = [x / magnitude for x in vector]
+            
+            return vector
+        
+        # Fallback to random generation
+        return [random.uniform(-1.0, 1.0) for _ in range(dims)]
 
     def transform_mapping_to_generators(self, mapping_dict: Dict[str, Any], field_path_prefix="") -> Dict[str, Callable[[], Any]]:
         """
