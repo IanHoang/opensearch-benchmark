@@ -202,7 +202,11 @@ def _load_single_workload(cfg, workload_repository, workload_name):
         reader = WorkloadFileReader(cfg)
         current_workload = reader.read(workload_name, workload_repository.workload_file(workload_name), workload_dir)
         tpr = WorkloadProcessorRegistry(cfg)
-        has_plugins = load_workload_plugins(cfg, workload_name, register_workload_processor=tpr.register_workload_processor)
+        # Import runner module to enable custom runner registration during workload loading
+        from osbenchmark.worker_coordinator import runner as runner_module
+        has_plugins = load_workload_plugins(cfg, workload_name,
+                                           register_runner=runner_module.register_runner,
+                                           register_workload_processor=tpr.register_workload_processor)
         current_workload.has_plugins = has_plugins
         for processor in tpr.processors:
             processor.on_after_load_workload(current_workload)

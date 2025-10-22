@@ -99,6 +99,9 @@ install_requires = [
     #   jmespath: MIT
     #   s3transfer: Apache 2.0
     "boto3>=1.28.62",
+    # License: Apache 2.0
+    # Required for CloudWatch Logs workload runner
+    "aioboto3>=12.0.0",
     # Licence: BSD-3-Clause
     "zstandard>=0.22.0",
     # License: BSD
