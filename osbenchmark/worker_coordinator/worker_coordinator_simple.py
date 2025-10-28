@@ -2311,48 +2311,27 @@ class AsyncExecutor:
         processing_start = time.perf_counter()
         self.schedule_handle.before_request(processing_start)
 
-        context_manager = await self._prepare_context_manager(params)
-
-        request_start = request_end = client_request_start = client_request_end = None
+        # Simplified timing without context manager
+        request_start = client_request_start = processing_start
         total_ops, total_ops_unit, request_meta_data = 0, "ops", {}
-        async with context_manager as request_context:
-            try:
-                total_ops, total_ops_unit, request_meta_data = await asyncio.wait_for(
-                    execute_single(
-                        self.runner, self.opensearch, params, self.on_error,
-                        redline_enabled=self.redline_enabled, client_enabled=client_state
-                    ),
-                    timeout=self.base_timeout if request_timeout is None else request_timeout
-                )
-            except asyncio.TimeoutError:
-                self.logger.error("Client %s request timed out after %s s", self.client_id, self.base_timeout)
-                request_meta_data = {"success": False, "error-type": "timeout"}
 
-                # Simulate full timing lifecycle
-                request_context_holder.on_client_request_start()
-                request_context_holder.on_request_start()
-                request_context_holder.on_request_end()
-                request_context_holder.on_client_request_end()
+        try:
+            total_ops, total_ops_unit, request_meta_data = await asyncio.wait_for(
+                execute_single(
+                    self.runner, self.opensearch, params, self.on_error,
+                    redline_enabled=self.redline_enabled, client_enabled=client_state
+                ),
+                timeout=self.base_timeout if request_timeout is None else request_timeout
+            )
+        except asyncio.TimeoutError:
+            self.logger.error("Client %s request timed out after %s s", self.client_id, self.base_timeout)
+            request_meta_data = {"success": False, "error-type": "timeout"}
 
-            # Now safely extract request timings
-            request_start = request_context.request_start
-            request_end = request_context.request_end
-            client_request_start = request_context.client_request_start
-            client_request_end = request_context.client_request_end
+        # Capture end times
+        request_end = client_request_end = time.perf_counter()
 
-        # If request failed or timings weren't properly captured, fall back
-        if not request_meta_data.get("success") or None in (request_start, request_end, client_request_start,
-                                                            client_request_end):
-            if request_start is None:
-                request_start = processing_start
-            if client_request_start is None:
-                client_request_start = processing_start
-            now = time.perf_counter()
-            if request_end is None:
-                request_end = now
-            if client_request_end is None:
-                client_request_end = now
-
+        # Handle errors
+        if not request_meta_data.get("success", True):
             if not request_meta_data.get("skipped", False):
                 error_info = {
                     "client_id": self.client_id,
@@ -2509,8 +2488,6 @@ class AsyncExecutor:
                 self.complete.set()
             await self._cleanup()
 
-request_context_holder = client.RequestContextHolder()
-
 
 async def execute_single(runner, opensearch, params, on_error, redline_enabled=False, client_enabled=True):
     """
@@ -2539,7 +2516,6 @@ async def execute_single(runner, opensearch, params, on_error, redline_enabled=F
                 total_ops_unit = "ops"
                 request_meta_data = {"success": True}
         except opensearchpy.TransportError as e:
-            request_context_holder.on_client_request_end()
             # we *specifically* want to distinguish connection refused (a node died?) from connection timeouts
             # pylint: disable=unidiomatic-typecheck
             if type(e) is opensearchpy.ConnectionError:
@@ -2566,7 +2542,6 @@ async def execute_single(runner, opensearch, params, on_error, redline_enabled=F
                     error_description = str(e.error)
                 request_meta_data["error-description"] = error_description
         except KeyError as e:
-            request_context_holder.on_client_request_end()
             logging.getLogger(__name__).exception("Cannot execute runner [%s]; most likely due to missing parameters.", str(runner))
             msg = "Cannot execute [%s]. Provided parameters are: %s. Error: [%s]." % (str(runner), list(params.keys()), str(e))
             if not redline_enabled:
@@ -2598,16 +2573,12 @@ async def execute_single(runner, opensearch, params, on_error, redline_enabled=F
                 if not redline_enabled:
                     logging.getLogger(__name__).error(request_meta_data["error-description"])
     else:
-        request_context_holder.on_client_request_start()
-        request_context_holder.on_request_start()
         total_ops = 0
         total_ops_unit = "ops"
         request_meta_data = {
             "success": True,
             "skipped_request": True
         }
-        request_context_holder.on_request_end()
-        request_context_holder.on_client_request_end()
     return total_ops, total_ops_unit, request_meta_data
 
 

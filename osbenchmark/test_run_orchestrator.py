@@ -119,18 +119,28 @@ class BenchmarkActor(actor.BenchmarkActor):
     def receiveMsg_EngineStarted(self, msg, sender):
         self.logger.info("Builder has started engine successfully.")
         self.coordinator.test_run.cluster_config_revision = msg.cluster_config_revision
+
+        # Check if workload requires simplified coordinator
+        use_simple_coordinator = getattr(self.coordinator.current_workload, 'use_simple_coordinator', False)
+        if use_simple_coordinator:
+            self.logger.info("Using simplified worker coordinator (RequestContextManager disabled)")
+            from osbenchmark.worker_coordinator import worker_coordinator_simple
+            self.coordinator_module = worker_coordinator_simple
+        else:
+            self.coordinator_module = worker_coordinator
+
         self.main_worker_coordinator = self.createActor(
-            worker_coordinator.WorkerCoordinatorActor,
+            self.coordinator_module.WorkerCoordinatorActor,
             targetActorRequirements={"coordinator": True}
             )
         self.logger.info("Telling worker_coordinator to prepare for benchmarking.")
-        self.send(self.main_worker_coordinator, worker_coordinator.PrepareBenchmark(self.cfg, self.coordinator.current_workload))
+        self.send(self.main_worker_coordinator, self.coordinator_module.PrepareBenchmark(self.cfg, self.coordinator.current_workload))
 
     @actor.no_retry("test run orchestrator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_PreparationComplete(self, msg, sender):
         self.coordinator.on_preparation_complete(msg.distribution_flavor, msg.distribution_version, msg.revision)
         self.logger.info("Telling worker_coordinator to start benchmark.")
-        self.send(self.main_worker_coordinator, worker_coordinator.StartBenchmark())
+        self.send(self.main_worker_coordinator, self.coordinator_module.StartBenchmark())
 
     @actor.no_retry("test run orchestrator")  # pylint: disable=no-value-for-parameter
     def receiveMsg_TaskFinished(self, msg, sender):

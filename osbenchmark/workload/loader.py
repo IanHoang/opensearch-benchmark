@@ -204,10 +204,11 @@ def _load_single_workload(cfg, workload_repository, workload_name):
         tpr = WorkloadProcessorRegistry(cfg)
         # Import runner module to enable custom runner registration during workload loading
         from osbenchmark.worker_coordinator import runner as runner_module
-        has_plugins = load_workload_plugins(cfg, workload_name,
+        has_plugins, use_simple_coordinator = load_workload_plugins(cfg, workload_name,
                                            register_runner=runner_module.register_runner,
                                            register_workload_processor=tpr.register_workload_processor)
         current_workload.has_plugins = has_plugins
+        current_workload.use_simple_coordinator = use_simple_coordinator
         for processor in tpr.processors:
             processor.on_after_load_workload(current_workload)
         return current_workload
@@ -236,7 +237,9 @@ def load_workload_plugins(cfg,
     :param register_workload_processor: An optional function where workload processors can be registered.
     :param force_update: If set to ``True`` this ensures that the workload is first updated from the remote repository.
                          Defaults to ``False``.
-    :return: True iff this workload defines plugins and they have been loaded.
+    :return: A tuple of (has_plugins, use_simple_coordinator) where has_plugins is True iff this workload defines
+             plugins and they have been loaded, and use_simple_coordinator is True iff the workload requires
+             simplified worker coordinator.
     """
     repo = workload_repo(cfg, fetch=force_update, update=force_update)
     workload_plugin_path = repo.workload_dir(workload_name)
@@ -245,9 +248,11 @@ def load_workload_plugins(cfg,
 
     if plugin_reader.can_load():
         plugin_reader.load()
-        return True
+        # Check if the workload plugin module has USE_SIMPLE_COORDINATOR flag
+        use_simple_coordinator = getattr(plugin_reader.root_module, 'USE_SIMPLE_COORDINATOR', False)
+        return True, use_simple_coordinator
     else:
-        return False
+        return False, False
 
 
 def set_absolute_data_path(cfg, t):
@@ -1417,15 +1422,16 @@ class WorkloadPluginReader:
         self.scheduler_registry = scheduler_registry
         self.workload_processor_registry = workload_processor_registry
         self.loader = modules.ComponentLoader(root_path=workload_plugin_path, component_entry_point="workload")
+        self.root_module = None
 
     def can_load(self):
         return self.loader.can_load()
 
     def load(self):
-        root_module = self.loader.load()
+        self.root_module = self.loader.load()
         try:
             # every module needs to have a register() method
-            root_module.register(self)
+            self.root_module.register(self)
         except BaseException:
             msg = "Could not register workload plugin at [%s]" % self.loader.root_path
             logging.getLogger(__name__).exception(msg)
