@@ -78,9 +78,11 @@ class FieldOverride(BaseModel):
             'generate_boolean',
             'generate_date',
             'generate_ip',
-            'generate_geopoint',
+            'generate_geo_point',
             'generate_object',
-            'generate_nested'
+            'generate_nested',
+            'generate_knn_vector',
+            'generate_sparse_vector'
         ]
 
         if v not in valid_generators:
@@ -94,8 +96,23 @@ class MappingGenerationValuesConfig(BaseModel):
     # pylint: disable = no-self-argument
     @field_validator('generator_overrides')
     def validate_generator_types(cls, v):
+        # Based on this documentation from OpenSearch: https://docs.opensearch.org/latest/mappings/supported-field-types/index/
+        # TODO: Add more support for
         if v is not None:
-            valid_generator_types = ['integer', 'long', 'float', 'double', 'date', 'text', 'keyword', 'short', 'byte', 'ip', 'geopoint', 'nested', 'boolean']
+            supported_mapping_field_types = {
+                'core-field-types': ['boolean'],
+                'string-based-field-types': ['text', 'keyword'],
+                'numeric-field-types': ['byte', 'short', 'integer', 'long', 'float', 'double'],
+                'date-time-field-types': ['date'],
+                'ip-field-types': ['ip'],
+                'geographic-field-types': ['geo_point'],
+                'object-field-types': ['object', 'nested'],
+                'vector-field-types': ['knn_vector', 'sparse_vector']
+            }
+            valid_generator_types = []
+
+            for field_types in supported_mapping_field_types.values():
+                valid_generator_types.extend(field_types)
 
             for generator_type in v.keys():
                 if generator_type not in valid_generator_types:

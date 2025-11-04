@@ -80,6 +80,7 @@ class MappingConverter:
         random.seed(seed)
 
         # seed these
+        # TODO: Should apply all of these: https://docs.opensearch.org/latest/mappings/supported-field-types/index/
         self.type_generators = {
             "text": self.generate_text,
             "keyword": self.generate_keyword,
@@ -96,6 +97,7 @@ class MappingConverter:
             "nested": self.generate_nested,
             "geo_point": self.generate_geo_point,
             "knn_vector": self.generate_knn_vector,
+            "sparse_vector": self.generate_sparse_vector,
         }
 
     @staticmethod
@@ -213,34 +215,68 @@ class MappingConverter:
     def generate_knn_vector(self, field_def: Dict[str, Any], **params) -> list:
         dims = field_def.get("dimension", params.get("dimension", 128))
         sample_vectors = params.get("sample_vectors", None)
-        
+
         if sample_vectors:
             noise_factor = params.get("noise_factor", 0.1)
             distribution_type = params.get("distribution_type", "gaussian")
             normalize = params.get("normalize", False)
-            
+
             # Pick random sample vector
             base_vector = random.choice(sample_vectors)
-            
+
             # Generate noise based on distribution type
             if distribution_type == "gaussian":
                 noise = [random.gauss(0, noise_factor) for _ in range(dims)]
             else:  # uniform
                 noise = [random.uniform(-noise_factor, noise_factor) for _ in range(dims)]
-            
+
             # Add noise to base vector
             vector = [base_vector[i] + noise[i] for i in range(dims)]
-            
+
             # Normalize if requested
             if normalize:
                 magnitude = sum(x**2 for x in vector) ** 0.5
                 if magnitude > 0:
                     vector = [x / magnitude for x in vector]
-            
+
             return vector
-        
+
         # Fallback to random generation
         return [random.uniform(-1.0, 1.0) for _ in range(dims)]
+
+    def generate_sparse_vector(self, field_def: Dict[str, Any], **params) -> Dict[str, float]:
+        """
+        Generate sparse vector as token_id->weight pairs for sparse_vector field type.
+
+        Sparse vectors are used in neural sparse search and represent token importance.
+        Format: {"token_id": weight, ...} where token_ids are strings and weights are positive floats.
+
+        Args:
+            field_def: Field definition from mapping
+            **params: Optional parameters:
+                - num_tokens: Number of token-weight pairs (default: 10)
+                - min_weight: Minimum weight value (default: 0.01)
+                - max_weight: Maximum weight value (default: 1.0)
+                - token_id_start: Starting token ID (default: 1000)
+                - token_id_step: Step between token IDs (default: 100)
+
+        Returns:
+            Dict of token_id->weight pairs with positive float values
+        """
+        num_tokens = params.get('num_tokens', 10)
+        min_weight = params.get('min_weight', 0.01)
+        max_weight = params.get('max_weight', 1.0)
+        token_id_start = params.get('token_id_start', 1000)
+        token_id_step = params.get('token_id_step', 100)
+
+        # Generate token_id->weight pairs
+        sparse_vector = {}
+        for i in range(num_tokens):
+            token_id = str(token_id_start + (i * token_id_step))
+            weight = random.uniform(min_weight, max_weight)
+            sparse_vector[token_id] = round(weight, 4)  # 4 decimals for precision
+
+        return sparse_vector
 
     def transform_mapping_to_generators(self, mapping_dict: Dict[str, Any], field_path_prefix="") -> Dict[str, Callable[[], Any]]:
         """
