@@ -213,6 +213,32 @@ class MappingConverter:
         return []
 
     def generate_knn_vector(self, field_def: Dict[str, Any], **params) -> list:
+        """
+        Generate dense vector embeddings for knn_vector field type.
+        Supports both random generation and sample-based generation with noise for realistic clustering
+
+        Args:
+            field_def: Field definition from mapping
+            **params: Optional parameters:
+                dimension: Vector dimensions. Can be retrieved from field_ef (default: 128)
+                sample_vectors: List of base vectors to add noise to. Helps with realistic clustering.
+                               Without sample_vectors, OSB generates uniform random vectors between -1.0 and 1.0
+                noise_factor: Standard deviation (gaussian) or range (uniform) of noise (default: 0.1)
+                             Lower values (0.01-0.05) create tight clusters.
+                             Higher values (0.2-0.5) create diverse distributions.
+                distribution_type: Type of noise distribution (default: "gaussian").
+                              "gaussian": Normal distribution, realistic with outliers
+                              "uniform": Bounded distribution, predictable variation
+                normalize: Whether to normalize the vector after generation (default: False)
+                            Set to True when using cosinesimil space_type in OpenSearch.
+                            Normalized vectors have magnitude = 1.0.
+
+        Returns:
+            List of floats representing the dense vector.
+            When using sample_vectors, creates a realistic variation around sampled clusters provided.
+            Without sample_vectors, it uses random uniform values between -1.0 and 1.0.
+        """
+
         dims = field_def.get("dimension", params.get("dimension", 128))
         sample_vectors = params.get("sample_vectors", None)
 
@@ -241,27 +267,24 @@ class MappingConverter:
 
             return vector
 
-        # Fallback to random generation
+        # Fallback to random generation with each dimension being between -1 and 1
         return [random.uniform(-1.0, 1.0) for _ in range(dims)]
 
     def generate_sparse_vector(self, field_def: Dict[str, Any], **params) -> Dict[str, float]:
         """
-        Generate sparse vector as token_id->weight pairs for sparse_vector field type.
-
-        Sparse vectors are used in neural sparse search and represent token importance.
-        Format: {"token_id": weight, ...} where token_ids are strings and weights are positive floats.
+        Generate sparse vector as token_id -> weight pairs for sparse_vector field type.
 
         Args:
             field_def: Field definition from mapping
-            **params: Optional parameters:
-                - num_tokens: Number of token-weight pairs (default: 10)
-                - min_weight: Minimum weight value (default: 0.01)
-                - max_weight: Maximum weight value (default: 1.0)
-                - token_id_start: Starting token ID (default: 1000)
-                - token_id_step: Step between token IDs (default: 100)
+            **params: The following are optional parameters:
+                num_tokens: Number of token-weight pairs (default: 10)
+                min_weight: Minimum weight value (default: 0.01)
+                max_weight: Maximum weight value (default: 1.0)
+                token_id_start: Starting token ID (default: 1000)
+                token_id_step: Step between token IDs (default: 100)
 
         Returns:
-            Dict of token_id->weight pairs with positive float values
+            Dict of token_id -> weight pairs with positive float values
         """
         num_tokens = params.get('num_tokens', 10)
         min_weight = params.get('min_weight', 0.01)
@@ -269,12 +292,11 @@ class MappingConverter:
         token_id_start = params.get('token_id_start', 1000)
         token_id_step = params.get('token_id_step', 100)
 
-        # Generate token_id->weight pairs
         sparse_vector = {}
         for i in range(num_tokens):
             token_id = str(token_id_start + (i * token_id_step))
             weight = random.uniform(min_weight, max_weight)
-            sparse_vector[token_id] = round(weight, 4)  # 4 decimals for precision
+            sparse_vector[token_id] = round(weight, 4) # imitate real neural sparse search models like Splade and DeepImpact
 
         return sparse_vector
 

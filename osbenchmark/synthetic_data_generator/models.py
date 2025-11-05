@@ -55,6 +55,25 @@ class GeneratorParams(BaseModel):
     # Text / Keywords Params
     must_include: Optional[List[str]] = None
     choices: Optional[List[str]] = None
+    min_words: Optional[int] = None
+    max_words: Optional[int] = None
+
+    # Float / Double Params
+    precision: Optional[int] = None
+
+    # knn_vector Params
+    dimension: Optional[int] = None
+    sample_vectors: Optional[List[List[float]]] = None
+    noise_factor: Optional[float] = None
+    distribution_type: Optional[str] = None
+    normalize: Optional[bool] = None
+
+    # sparse_vector Params
+    num_tokens: Optional[int] = None
+    min_weight: Optional[float] = None
+    max_weight: Optional[float] = None
+    token_id_start: Optional[int] = None
+    token_id_step: Optional[int] = None
 
     class Config:
         extra = 'forbid'
